@@ -1,0 +1,172 @@
+.panel {
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--panel-1) 0%, var(--panel-0) 100%);
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.fileBrowser {
+  min-height: 0;
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  min-width: 0;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panelHeader h2 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-1);
+}
+
+.panelHeader > small {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 10px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--text-2);
+  font-size: 0.72rem;
+}
+
+.treeScroll {
+  overflow: auto;
+  padding: 8px 0;
+  font-size: 0.82rem;
+  min-height: 0;
+}
+
+.treeScroll {
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb-start) var(--scrollbar-track);
+}
+
+.treeScroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.treeScroll::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.treeScroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--scrollbar-thumb-start) 0%, var(--scrollbar-thumb-end) 100%);
+  border: 2px solid var(--scrollbar-track);
+  border-radius: var(--radius);
+}
+
+.treeScroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    var(--scrollbar-thumb-hover-start) 0%,
+    var(--scrollbar-thumb-hover-end) 100%
+  );
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius);
+  padding: 3px 4px;
+  cursor: pointer;
+}
+
+.treeRow:hover {
+  background: var(--tree-hover-bg);
+}
+
+.treeRowSelected {
+  background: var(--tree-selected-bg);
+}
+
+.treeRowLoading {
+  cursor: default;
+}
+
+.treeRowLoading:hover {
+  background: transparent;
+}
+
+.treeSpacer {
+  width: 24px;
+  text-align: center;
+  color: var(--tree-spacer);
+}
+
+.treeName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-0);
+}
+
+.treeNameDir {
+  color: var(--tree-dir-text);
+  font-weight: 600;
+}
+
+.treeNameFile {
+  color: var(--text-0);
+}
+
+.treeNameLoading {
+  color: var(--text-2);
+  font-style: italic;
+}
+
+.treeToggle {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, var(--button-bg-start) 0%, var(--button-bg-end) 100%);
+  color: var(--text-0);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.treeToggle:hover {
+  border-color: var(--button-hover-border);
+  background: linear-gradient(180deg, var(--button-hover-bg-start) 0%, var(--button-hover-bg-end) 100%);
+}
+
+.treeToggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.treeChevron {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}

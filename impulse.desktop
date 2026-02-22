@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Impulse
+Comment=Desktop music player
+Exec=impulse %U
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Icon=impulse
+StartupNotify=false
+StartupWMClass=impulse
+X-GNOME-WMClass=impulse
+MimeType=audio/aac;audio/aiff;audio/flac;audio/mp4;audio/mpeg;audio/ogg;audio/opus;audio/wav;audio/x-aiff;audio/x-ape;audio/x-flac;audio/x-m4a;audio/x-ms-wma;audio/x-wav;audio/x-wavpack;

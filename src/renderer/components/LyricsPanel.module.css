@@ -1,0 +1,40 @@
+.lyricsPanel {
+  --lyrics-row-height: 1.4rem;
+  border: 1px solid var(--border);
+  border-left: none;
+  border-right: none;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--lyrics-bg-start) 0%, var(--lyrics-bg-end) 100%);
+  min-height: 76px;
+  padding: 10px;
+  display: grid;
+  grid-template-rows: repeat(3, var(--lyrics-row-height));
+  gap: 4px;
+  align-content: center;
+}
+
+.lyricsLine {
+  min-height: var(--lyrics-row-height);
+  line-height: var(--lyrics-row-height);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 0.88rem;
+}
+
+.lyricsLineCurrent {
+  font-size: 0.96rem;
+  color: var(--lyrics-current);
+  font-weight: 600;
+}
+
+.lyricsLineDim {
+  color: var(--text-2);
+}
+
+.lyricsError {
+  color: var(--danger);
+  text-align: center;
+}

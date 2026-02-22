@@ -1,0 +1,65 @@
+.propertiesLoading,
+.propertiesError,
+.propertiesEmpty {
+  margin: 12px 0 0;
+  color: var(--text-1);
+  font-size: 0.85rem;
+}
+
+.propertiesError {
+  color: var(--danger);
+}
+
+.propertiesLayout {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.propertiesSection h4 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-1);
+}
+
+.propertiesTableWrap {
+  border: 1px solid var(--border);
+  background: var(--panel-1);
+  max-height: 260px;
+  overflow: auto;
+}
+
+.propertiesTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+}
+
+.propertiesTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--table-head-bg);
+}
+
+.propertiesTable th,
+.propertiesTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--table-row-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.propertiesTable td:first-child {
+  width: 30%;
+  color: var(--text-1);
+  word-break: break-word;
+}
+
+.propertiesTable td:last-child {
+  width: 70%;
+  word-break: break-word;
+}

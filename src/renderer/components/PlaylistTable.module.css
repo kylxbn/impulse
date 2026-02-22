@@ -1,0 +1,201 @@
+.panel {
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--panel-1) 0%, var(--panel-0) 100%);
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.playlistPanel {
+  min-width: 0;
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  min-width: 0;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panelHeader h2 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-1);
+}
+
+.panelHeader > small {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 10px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--text-2);
+  font-size: 0.72rem;
+}
+
+.playlistWrap {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.playlistWrap {
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb-start) var(--scrollbar-track);
+}
+
+.playlistWrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.playlistWrap::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.playlistWrap::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--scrollbar-thumb-start) 0%, var(--scrollbar-thumb-end) 100%);
+  border: 2px solid var(--scrollbar-track);
+  border-radius: var(--radius);
+}
+
+.playlistWrap::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    var(--scrollbar-thumb-hover-start) 0%,
+    var(--scrollbar-thumb-hover-end) 100%
+  );
+}
+
+.playlistTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.playlistTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--table-head-bg);
+}
+
+.playlistTable th,
+.playlistTable td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--table-row-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.playlistTable th:last-child > button,
+.playlistTable td:last-child {
+  padding-right: 10px;
+}
+
+.playlistTable th.sortableHeaderCell {
+  padding: 0;
+}
+
+.nowHeader,
+.nowCell {
+  width: 32px;
+  text-align: center;
+}
+
+.playlistTable th.alignRightHeader {
+  text-align: right;
+}
+
+.playlistTable td.alignRightCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.nowIndicator {
+  width: 15px;
+  height: 15px;
+  fill: var(--accent);
+  vertical-align: middle;
+}
+
+.bodyRow {
+  cursor: pointer;
+}
+
+.bodyRow:nth-child(even) {
+  background: var(--table-zebra-bg);
+}
+
+.rowSelected {
+  background: var(--table-selected-bg);
+}
+
+.bodyRow.rowSelected,
+.bodyRow.rowSelected:nth-child(even) {
+  background: var(--table-selected-bg);
+}
+
+.rowDropBefore td {
+  border-top: 2px solid var(--drop-indicator);
+}
+
+.dropEndRow td {
+  height: 0;
+  padding: 0;
+  border-bottom: none;
+  border-top: 2px solid var(--drop-indicator);
+}
+
+.dropEmptyRow td {
+  height: 28px;
+  padding: 0;
+  border-bottom: none;
+  border-top: 2px solid var(--drop-indicator);
+}
+
+.sortButton {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 7px 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.sortButtonRight {
+  text-align: right;
+}
+
+.sortButton:hover {
+  background: linear-gradient(180deg, var(--button-hover-bg-start) 0%, var(--button-hover-bg-end) 100%);
+}
+
+.sortButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.sortButtonActive {
+  color: var(--sort-active);
+}

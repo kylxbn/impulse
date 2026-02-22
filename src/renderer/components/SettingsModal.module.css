@@ -1,0 +1,112 @@
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--modal-backdrop);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
+.modal {
+  width: min(720px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  background: var(--panel-0);
+  color: var(--text-0);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb-start) var(--scrollbar-track);
+}
+
+.modal::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.modal::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.modal::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--scrollbar-thumb-start) 0%, var(--scrollbar-thumb-end) 100%);
+  border: 2px solid var(--scrollbar-track);
+  border-radius: var(--radius);
+}
+
+.modal::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    var(--scrollbar-thumb-hover-start) 0%,
+    var(--scrollbar-thumb-hover-end) 100%
+  );
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-1);
+}
+
+.modalGrid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.modalGrid label {
+  display: grid;
+  gap: 4px;
+}
+
+.modalGrid span {
+  font-size: 0.76rem;
+  color: var(--text-2);
+}
+
+.modalGrid input {
+  border: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  color: var(--text-0);
+  border-radius: var(--radius);
+  padding: 7px 8px;
+  font-size: 0.85rem;
+}
+
+.modalFooter {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modalFooter button {
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, var(--button-bg-start) 0%, var(--button-bg-end) 100%);
+  color: var(--text-0);
+  padding: 4px 10px;
+  border-radius: var(--radius-button);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.modalFooter button:hover {
+  border-color: var(--button-hover-border);
+  background: linear-gradient(180deg, var(--button-hover-bg-start) 0%, var(--button-hover-bg-end) 100%);
+}
+
+.modalFooter button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.primaryButton {
+  border-color: var(--primary-button-border) !important;
+  background: linear-gradient(180deg, var(--primary-button-bg-start) 0%, var(--primary-button-bg-end) 100%) !important;
+}

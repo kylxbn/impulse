@@ -1,0 +1,53 @@
+.message,
+.error {
+  margin: 12px 0 0;
+  color: var(--text-1);
+  font-size: 0.85rem;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.contentLayout {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.section h4 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-1);
+}
+
+.settingsGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settingsGrid label {
+  display: grid;
+  gap: 4px;
+}
+
+.settingsGrid label:first-child:last-child {
+  grid-column: 1 / -1;
+}
+
+.settingsGrid span {
+  font-size: 0.76rem;
+  color: var(--text-2);
+}
+
+.settingsGrid input {
+  border: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  color: var(--text-0);
+  border-radius: var(--radius);
+  padding: 7px 8px;
+  font-size: 0.85rem;
+}

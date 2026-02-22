@@ -1,0 +1,112 @@
+.loadingShell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--text-1);
+  font-size: 1rem;
+}
+
+.bootError {
+  max-width: min(760px, calc(100vw - 48px));
+  background: var(--panel-0);
+  color: var(--text-0);
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  box-shadow: var(--shadow);
+}
+
+.bootError strong {
+  color: var(--error-text);
+}
+
+.bootHint {
+  color: var(--text-2);
+  font-size: 0.85rem;
+}
+
+.appShell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  padding: 0;
+  gap: 5px;
+}
+
+.middleRegion {
+  display: flex;
+  gap: 2px;
+  min-height: 0;
+}
+
+.middleRegion.isResizing,
+.middleRegion.isResizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+.leftPane,
+.rightPane {
+  min-height: 0;
+  min-width: 0;
+}
+
+.leftPane {
+  flex: 0 0 auto;
+}
+
+.rightPane {
+  flex: 1 1 auto;
+}
+
+.focusedPane > section {
+  border-color: var(--panel-focus-border);
+}
+
+.paneResizer {
+  width: 10px;
+  margin: 2px -4px;
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+  border: none;
+  flex: 0 0 auto;
+}
+
+.paneResizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.paneResizer:hover::before,
+.middleRegion.isResizing .paneResizer::before {
+  background: var(--resizer-highlight);
+}
+
+.statusBar {
+  border: 1px solid var(--status-border);
+  border-width: 1px 0 0 0;
+  background: var(--status-bg);
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--status-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusBarError {
+  color: var(--status-error-text);
+  border-color: var(--error-border);
+}

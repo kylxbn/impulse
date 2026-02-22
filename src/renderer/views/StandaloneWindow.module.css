@@ -1,0 +1,99 @@
+.standaloneWindow {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: linear-gradient(180deg, var(--panel-1) 0%, var(--panel-0) 100%);
+  color: var(--text-0);
+  overflow: hidden;
+}
+
+.standaloneHeader {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.standaloneHeader h1 {
+  margin: 0;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-1);
+}
+
+.standaloneHeader p {
+  margin: 6px 0 0;
+  color: var(--text-2);
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standaloneContent {
+  padding: 12px 14px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.standaloneContent {
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb-start) var(--scrollbar-track);
+}
+
+.standaloneContent::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.standaloneContent::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.standaloneContent::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--scrollbar-thumb-start) 0%, var(--scrollbar-thumb-end) 100%);
+  border: 2px solid var(--scrollbar-track);
+  border-radius: var(--radius);
+}
+
+.standaloneContent::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    var(--scrollbar-thumb-hover-start) 0%,
+    var(--scrollbar-thumb-hover-end) 100%
+  );
+}
+
+.standaloneFooter {
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.standaloneFooter button {
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, var(--button-bg-start) 0%, var(--button-bg-end) 100%);
+  color: var(--text-0);
+  padding: 4px 10px;
+  border-radius: var(--radius-button);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.standaloneFooter button:hover {
+  border-color: var(--button-hover-border);
+  background: linear-gradient(180deg, var(--button-hover-bg-start) 0%, var(--button-hover-bg-end) 100%);
+}
+
+.standaloneFooter button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.primaryButton {
+  border-color: var(--primary-button-border) !important;
+  background: linear-gradient(180deg, var(--primary-button-bg-start) 0%, var(--primary-button-bg-end) 100%) !important;
+}

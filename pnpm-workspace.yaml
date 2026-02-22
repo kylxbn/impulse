@@ -1,0 +1,4 @@
+onlyBuiltDependencies:
+  - abstract-socket
+  - electron
+  - esbuild

@@ -1,0 +1,43 @@
+{
+  "name": "impulse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desktop music player using Electron, React and mpv IPC",
+  "type": "module",
+  "main": "dist/main/main/index.js",
+  "scripts": {
+    "dev": "concurrently -k \"pnpm:dev:main\" \"pnpm:dev:preload\" \"pnpm:dev:renderer\" \"pnpm:dev:electron\"",
+    "dev:main": "tsc -w -p tsconfig.main.json",
+    "dev:preload": "tsc -w -p tsconfig.preload.json",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on tcp:5173 file:dist/main/main/index.js file:dist/preload/preload/index.js && nodemon --watch dist/main --watch dist/preload --ext js --exec \"cross-env ELECTRON_RENDERER_URL=http://localhost:5173 electron dist/main/main/index.js\"",
+    "start": "pnpm run build && electron dist/main/main/index.js",
+    "build": "pnpm run build:main && pnpm run build:preload && pnpm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:preload": "tsc -p tsconfig.preload.json",
+    "build:renderer": "vite build",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "check": "pnpm run typecheck && pnpm run build",
+    "package:linux": "bash scripts/package-linux.sh",
+    "release:local": "pnpm run check && pnpm run package:linux"
+  },
+  "dependencies": {
+    "mpris-service": "^2.1.2",
+    "music-metadata": "^11.12.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^40.6.0",
+    "nodemon": "^3.1.14",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "wait-on": "^9.0.4"
+  }
+}
