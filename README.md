@@ -36,6 +36,12 @@ matters much (especially since I'm not really familiar with Qt 💀)
 - Session autosave and restore
 - Linux MPRIS bridge integration so media keys work on Wayland
 
+## Screenshots
+
+![main](docs/main.webp)
+
+![details](docs/details.webp)
+
 ## Requirements
 
 - Node.js (I have v24.13.0 installed but it probably works on newer versions... Maybe.)
