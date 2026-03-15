@@ -1,0 +1,54 @@
+find_package(PkgConfig REQUIRED)
+
+# System libraries via pkg-config
+pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
+    libavformat libavcodec libavutil libswresample libswscale)
+pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
+pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
+pkg_check_modules(SYSTEMD REQUIRED IMPORTED_TARGET libsystemd)
+
+# Third-party via FetchContent
+include(FetchContent)
+
+if(POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+endif()
+
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        docking
+    GIT_SHALLOW    TRUE)
+
+FetchContent_Declare(readerwriterqueue
+    GIT_REPOSITORY https://github.com/cameron314/readerwriterqueue.git
+    GIT_TAG        master)
+
+FetchContent_GetProperties(imgui)
+if(NOT imgui_POPULATED)
+    FetchContent_Populate(imgui)
+endif()
+
+FetchContent_GetProperties(readerwriterqueue)
+if(NOT readerwriterqueue_POPULATED)
+    FetchContent_Populate(readerwriterqueue)
+endif()
+
+# Build ImGui as a static lib with SDL3 + SDL_Renderer backends
+add_library(imgui_sdl3 STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+)
+target_include_directories(imgui_sdl3 PUBLIC
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends)
+target_link_libraries(imgui_sdl3 PUBLIC PkgConfig::SDL3)
+target_compile_options(imgui_sdl3 PRIVATE -w)  # suppress warnings in third-party
+
+# readerwriterqueue is header-only, so keep it as a simple interface target.
+add_library(readerwriterqueue INTERFACE)
+target_include_directories(readerwriterqueue INTERFACE
+    ${readerwriterqueue_SOURCE_DIR})

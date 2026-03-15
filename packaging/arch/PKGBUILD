@@ -1,0 +1,41 @@
+pkgname=impulse-git
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="A technical Linux-native desktop music player"
+arch=('x86_64')
+url='https://github.com/kylxbn/impulse'
+license=('GPL-3.0-only')
+depends=('ffmpeg' 'pipewire' 'sdl3' 'systemd-libs' 'gcc-libs' 'glibc')
+makedepends=('cmake' 'git' 'pkgconf')
+provides=('impulse')
+conflicts=('impulse')
+source=(
+    "${pkgname}::git+${url}.git"
+    'imgui::git+https://github.com/ocornut/imgui.git#commit=80f8298769fe7e6bedbfab3d015154681a0770e7'
+    'readerwriterqueue::git+https://github.com/cameron314/readerwriterqueue.git#commit=211616e0554f93152ab3108b8d93fbc23174a9d9'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+pkgver() {
+    cd "${srcdir}/${pkgname}"
+    printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    local cmake_args=(
+        -S "${srcdir}/${pkgname}"
+        -B "${srcdir}/build"
+        -DCMAKE_BUILD_TYPE=None
+        -DCMAKE_INSTALL_PREFIX=/usr
+        -DBUILD_TESTS=OFF
+        -DFETCHCONTENT_SOURCE_DIR_IMGUI="${srcdir}/imgui"
+        -DFETCHCONTENT_SOURCE_DIR_READERWRITERQUEUE="${srcdir}/readerwriterqueue"
+    )
+
+    cmake "${cmake_args[@]}"
+    cmake --build "${srcdir}/build"
+}
+
+package() {
+    DESTDIR="${pkgdir}" cmake --install "${srcdir}/build"
+}

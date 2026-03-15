@@ -1,0 +1,26 @@
+pkgbase = impulse-git
+	pkgdesc = A technical Linux-native desktop music player
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/kylxbn/impulse
+	arch = x86_64
+	license = GPL-3.0-only
+	makedepends = cmake
+	makedepends = git
+	makedepends = pkgconf
+	depends = ffmpeg
+	depends = pipewire
+	depends = sdl3
+	depends = systemd-libs
+	depends = gcc-libs
+	depends = glibc
+	provides = impulse
+	conflicts = impulse
+	source = impulse-git::git+https://github.com/kylxbn/impulse.git
+	source = imgui::git+https://github.com/ocornut/imgui.git#commit=80f8298769fe7e6bedbfab3d015154681a0770e7
+	source = readerwriterqueue::git+https://github.com/cameron314/readerwriterqueue.git#commit=211616e0554f93152ab3108b8d93fbc23174a9d9
+	sha256sums = SKIP
+	sha256sums = SKIP
+	sha256sums = SKIP
+
+pkgname = impulse-git

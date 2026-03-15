@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Impulse
+Comment=A technical Linux-native desktop music player
+Exec=impulse
+TryExec=impulse
+Icon=impulse
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;audio;player;playlist;gapless;metadata;
+StartupNotify=true

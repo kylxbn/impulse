@@ -1,0 +1,39 @@
+# Build directories
+build/
+build_rel/
+build_*/
+/packaging/arch/pkg/
+/packaging/arch/src/
+/packaging/arch/*.pkg.tar.*
+/packaging/arch/*.src.tar.*
+/packaging/arch/*.tar.gz
+/packaging/arch/*.tar.zst
+
+# CMake generated
+compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+
+# ImGui saved layout
+imgui.ini
+
+# Test audio files
+*.mp3
+*.flac
+*.ogg
+*.wav
+*.wv
+*.opus
+*.m4a
+*.aac
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cache/

@@ -1,0 +1,15 @@
+add_compile_options(
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Wno-unused-parameter
+    $<$<CONFIG:Release>:-O3>
+    $<$<CONFIG:Release>:-march=native>
+    $<$<CONFIG:Release>:-DNDEBUG>
+    $<$<CONFIG:Debug>:-O0>
+    $<$<CONFIG:Debug>:-g3>
+    $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+)
+add_link_options(
+    $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+)
