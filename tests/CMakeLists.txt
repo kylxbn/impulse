@@ -76,6 +76,18 @@ target_link_libraries(test_metadata PRIVATE PkgConfig::LIBAV)
 target_compile_features(test_metadata PRIVATE cxx_std_23)
 add_test(NAME test_metadata COMMAND test_metadata)
 
+add_executable(test_decoder
+    test_decoder.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/Decoder.cpp
+    ${CMAKE_SOURCE_DIR}/src/metadata/MetadataReader.cpp)
+target_include_directories(test_decoder PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${doctest_SOURCE_DIR}/doctest)
+target_link_libraries(test_decoder PRIVATE PkgConfig::LIBAV)
+target_compile_features(test_decoder PRIVATE cxx_std_23)
+add_test(NAME test_decoder COMMAND test_decoder)
+
 add_executable(test_session
     test_session.cpp
     ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
