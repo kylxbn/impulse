@@ -3,6 +3,7 @@
 #include "mpris/MprisModel.hpp"
 
 #include <atomic>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -86,6 +87,7 @@ public:
 
 private:
     bool initialize();
+    void signalBusThread() noexcept;
     void runLoop(std::stop_token stop_token);
     void emitChangedProperties(const MprisSnapshot& previous,
                                const MprisSnapshot& current,
@@ -106,6 +108,7 @@ private:
     std::atomic<bool> active_{false};
     std::atomic<bool> stopping_{false};
     std::jthread      bus_thread_;
+    int               wake_fd_ = -1;
     sd_bus*           bus_ = nullptr;
     sd_bus_slot*      root_slot_ = nullptr;
     sd_bus_slot*      player_slot_ = nullptr;

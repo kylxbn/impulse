@@ -72,7 +72,7 @@ private:
     void initImGui();
     void shutdownImGui();
     void shutdownSDL();
-    int  nextWaitTimeoutMs(bool minimized) const;
+    int  nextWaitTimeoutMs(bool minimized);
     std::chrono::milliseconds targetRenderInterval(bool minimized) const;
     bool processEvent(const SDL_Event& ev);
     bool pumpEvents(int wait_timeout_ms);
@@ -198,6 +198,17 @@ private:
 
         bool operator==(const RenderSnapshot& other) const;
     };
+
+    struct FrameIdling {
+        std::chrono::milliseconds interactive_render_interval{33};
+        std::chrono::milliseconds playback_idle_render_interval{100};
+        std::chrono::milliseconds idle_render_interval{250};
+        std::chrono::milliseconds minimized_render_interval{500};
+        std::chrono::milliseconds interaction_boost_window{250};
+        std::chrono::steady_clock::time_point last_event_at{};
+        bool is_idling = false;
+    };
+
     RenderSnapshot captureRenderSnapshot() const;
 
     Application&     app_;
@@ -228,6 +239,7 @@ private:
     std::shared_ptr<NowPlayingTrack> frame_now_playing_;
     RenderSnapshot        frame_snapshot_;
     RenderSnapshot        last_rendered_snapshot_;
+    FrameIdling           frame_idling_{};
     std::chrono::steady_clock::time_point last_render_at_{};
     bool                  has_rendered_frame_ = false;
     bool                  redraw_requested_ = true;

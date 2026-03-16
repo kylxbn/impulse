@@ -25,6 +25,8 @@ struct pw_stream_events;
 // All shared state between threads is communicated via atomics only.
 class AudioOutput {
 public:
+    using WakeCallback = void (*)(void*);
+
     static constexpr size_t kRingCapacity = 1 << 21;  // 2M floats (~21.8s at 48kHz stereo)
     // Streams can arrive in very small decoded chunks while playback is still
     // paused for startup buffering, so keep generous headroom here.
@@ -53,7 +55,9 @@ public:
               std::atomic<int64_t>&  frame_counter,
               std::atomic<int>&      seek_generation,
               std::atomic<int64_t>&  current_bitrate_bps,
-              std::atomic<float>&    stream_volume);
+              std::atomic<float>&    stream_volume,
+              WakeCallback           wake_callback = nullptr,
+              void*                  wake_userdata = nullptr);
 
     void shutdown();
 
@@ -102,6 +106,8 @@ private:
     std::atomic<bool>  stream_active_{false};
     std::atomic<bool>  underrun_detected_{false};
     Config             config_;
+    WakeCallback       wake_callback_ = nullptr;
+    void*              wake_userdata_ = nullptr;
 
     // Protected by the PipeWire thread-loop lock.
     bool     has_pending_volume_ = false;

@@ -11,6 +11,7 @@
 #include "core/NowPlayingTrack.hpp"
 #include "core/PlaybackState.hpp"
 #include <atomic>
+#include <condition_variable>
 #include <filesystem>
 #include <mutex>
 #include <memory>
@@ -72,8 +73,13 @@ public:
     std::shared_ptr<NowPlayingTrack> currentNowPlaying() const;
 
 private:
+    static void onAudioOutputProgress(void* userdata) noexcept;
     void decodeLoop(std::stop_token stop);
     void enqueueCommand(const Command& cmd);
+    void signalDecodeLoop() noexcept;
+    void waitForDecodeLoopSignal(std::stop_token stop,
+                                 uint64_t observed_generation,
+                                 std::chrono::milliseconds max_wait = std::chrono::milliseconds::max());
     void discardBufferedAudio(int64_t target_frame);
     bool processCommand(const Command& cmd);
     bool openTrack(const MediaSource& source,
@@ -124,6 +130,9 @@ private:
     // --- Threading ---
     moodycamel::ReaderWriterQueue<Command> command_queue_{64};
     std::jthread                           decode_thread_;
+    mutable std::mutex                     decode_wait_mutex_;
+    std::condition_variable_any            decode_wait_cv_;
+    std::atomic<uint64_t>                  decode_wakeup_generation_{0};
     GaplessPendingRequestState             pending_gapless_request_;
     std::optional<PreparedGaplessTrack>    prepared_gapless_track_;
     GaplessTrackQueue                      gapless_track_switches_;

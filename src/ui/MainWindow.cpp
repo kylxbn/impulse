@@ -607,18 +607,23 @@ bool MainWindow::runFrame() {
     return true;
 }
 
-int MainWindow::nextWaitTimeoutMs(bool minimized) const {
+int MainWindow::nextWaitTimeoutMs(bool minimized) {
     using namespace std::chrono;
 
-    if (redraw_requested_ || !has_rendered_frame_)
+    if (redraw_requested_ || !has_rendered_frame_) {
+        frame_idling_.is_idling = false;
         return 0;
+    }
 
     const auto refresh_interval = targetRenderInterval(minimized);
     const auto now = steady_clock::now();
     const auto next_refresh = last_render_at_ + refresh_interval;
-    if (next_refresh <= now)
+    if (next_refresh <= now) {
+        frame_idling_.is_idling = false;
         return 0;
+    }
 
+    frame_idling_.is_idling = true;
     return static_cast<int>(
         duration_cast<milliseconds>(next_refresh - now).count());
 }
@@ -627,7 +632,15 @@ std::chrono::milliseconds MainWindow::targetRenderInterval(bool minimized) const
     using namespace std::chrono;
 
     if (minimized)
-        return 500ms;  // ~2 FPS
+        return frame_idling_.minimized_render_interval;
+
+    // After any event, keep a short burst of higher-frequency redraws so input
+    // still feels responsive, then fall back to a lower idle refresh rate.
+    const bool recent_input =
+        frame_idling_.last_event_at != steady_clock::time_point{} &&
+        (steady_clock::now() - frame_idling_.last_event_at) < frame_idling_.interaction_boost_window;
+    if (recent_input)
+        return frame_idling_.interactive_render_interval;
 
     const PlaybackStatus playback_status = app_.playbackStatus();
     const bool active_playback = playback_status == PlaybackStatus::Buffering ||
@@ -635,14 +648,15 @@ std::chrono::milliseconds MainWindow::targetRenderInterval(bool minimized) const
                                  playback_status == PlaybackStatus::EndOfTrack;
 
     if (active_playback)
-        return 33ms;   // ~30 FPS
+        return frame_idling_.playback_idle_render_interval;
 
-    return 80ms;       // 12.5 FPS
+    return frame_idling_.idle_render_interval;
 }
 
 bool MainWindow::processEvent(const SDL_Event& ev) {
     ImGui_ImplSDL3_ProcessEvent(&ev);
     redraw_requested_ = true;
+    frame_idling_.last_event_at = std::chrono::steady_clock::now();
 
     if (ev.type == SDL_EVENT_QUIT)
         return false;

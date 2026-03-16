@@ -60,13 +60,17 @@ bool AudioOutput::init(Ring&                 ring,
                        std::atomic<int64_t>& frame_counter,
                        std::atomic<int>&     seek_generation,
                        std::atomic<int64_t>& current_bitrate_bps,
-                       std::atomic<float>&   stream_volume) {
+                       std::atomic<float>&   stream_volume,
+                       WakeCallback          wake_callback,
+                       void*                 wake_userdata) {
     ring_                 = &ring;
     bitrate_ring_         = &bitrate_ring;
     frame_ctr_            = &frame_counter;
     seek_gen_             = &seek_generation;
     current_bitrate_bps_  = &current_bitrate_bps;
     observed_volume_      = &stream_volume;
+    wake_callback_        = wake_callback;
+    wake_userdata_        = wake_userdata;
     last_seek_gen_        = seek_generation.load(std::memory_order_acquire);
     observed_seek_gen_.store(last_seek_gen_, std::memory_order_release);
 
@@ -144,10 +148,13 @@ bool AudioOutput::init(Ring&                 ring,
 // ---------------------------------------------------------------------------
 void AudioOutput::shutdown() {
     stream_active_.store(false, std::memory_order_release);
+    observed_seek_gen_.notify_all();
     if (loop_) pw_thread_loop_stop(loop_);
     if (stream_) { pw_stream_destroy(stream_); stream_ = nullptr; }
     if (loop_)   { pw_thread_loop_destroy(loop_); loop_ = nullptr; }
     observed_volume_ = nullptr;
+    wake_callback_ = nullptr;
+    wake_userdata_ = nullptr;
     pw_deinit();
 }
 
@@ -178,9 +185,13 @@ float AudioOutput::volume() const {
 
 void AudioOutput::waitForSeekGeneration(int generation,
                                         std::chrono::milliseconds poll_interval) {
+    (void) poll_interval;
+
+    int observed = observed_seek_gen_.load(std::memory_order_acquire);
     while (stream_active_.load(std::memory_order_acquire) &&
-           observed_seek_gen_.load(std::memory_order_acquire) != generation) {
-        std::this_thread::sleep_for(poll_interval);
+           observed != generation) {
+        observed_seek_gen_.wait(observed, std::memory_order_acquire);
+        observed = observed_seek_gen_.load(std::memory_order_acquire);
     }
 }
 
@@ -285,6 +296,7 @@ void AudioOutput::onProcess(void* userdata) {
     if (gen != self->last_seek_gen_) {
         self->last_seek_gen_ = gen;
         self->observed_seek_gen_.store(gen, std::memory_order_release);
+        self->observed_seek_gen_.notify_all();
         self->current_bitrate_bps_->store(0, std::memory_order_relaxed);
         self->underrun_detected_.store(false, std::memory_order_relaxed);
         std::memset(dst, 0, n_frames * self->config_.channels * sizeof(float));
@@ -328,6 +340,8 @@ void AudioOutput::onProcess(void* userdata) {
     self->frame_ctr_->fetch_add(
         static_cast<int64_t>(got_frames),
         std::memory_order_relaxed);
+    if (got_frames > 0 && self->wake_callback_)
+        self->wake_callback_(self->wake_userdata_);
 
     spabuf->datas[0].chunk->offset = 0;
     spabuf->datas[0].chunk->stride = static_cast<int32_t>(
