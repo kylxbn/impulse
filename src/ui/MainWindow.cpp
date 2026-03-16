@@ -510,6 +510,7 @@ bool MainWindow::runFrame() {
         return false;
 
     frame_now_playing_ = app_.currentNowPlaying();
+    syncPendingEndOfTrackAdvanceWithNowPlaying();
     processMprisCommands();
 
     const bool decoder_reached_eof = app_.decoderReachedEof();
@@ -532,7 +533,7 @@ bool MainWindow::runFrame() {
             }
         }
     } else {
-        pending_end_of_track_advance_ = false;
+        clearPendingEndOfTrackAdvance();
     }
 
     const auto playback_status = app_.playbackStatus();
@@ -555,6 +556,7 @@ bool MainWindow::runFrame() {
     }
 
     frame_now_playing_ = app_.currentNowPlaying();
+    syncPendingEndOfTrackAdvanceWithNowPlaying();
     syncPlaylistCursorToNowPlaying(frame_now_playing_ ? frame_now_playing_->playlist_tab_id : 0,
                                    frame_now_playing_ ? frame_now_playing_->playlist_item_id : 0);
     frame_snapshot_ = captureRenderSnapshot();
@@ -2382,7 +2384,7 @@ bool MainWindow::playFirstTrackIfStopped() {
         frame_now_playing_->playlist_tab_id == 0 &&
         frame_now_playing_->track_info &&
         !frame_now_playing_->track_info->source.empty()) {
-        pending_end_of_track_advance_ = false;
+        clearPendingEndOfTrackAdvance();
         seek_drag_progress_.reset();
         app_.commandOpenFile(frame_now_playing_->track_info->source);
         return true;
@@ -2458,7 +2460,7 @@ void MainWindow::handleMprisCommand(const MprisCommand& command) {
             break;
 
         case MprisCommandType::Stop:
-            pending_end_of_track_advance_ = false;
+            clearPendingEndOfTrackAdvance();
             seek_drag_progress_.reset();
             app_.commandStop();
             break;
@@ -2513,7 +2515,7 @@ void MainWindow::handleMprisCommand(const MprisCommand& command) {
             if (!source)
                 break;
 
-            pending_end_of_track_advance_ = false;
+            clearPendingEndOfTrackAdvance();
             seek_drag_progress_.reset();
             if (isPlaylistSource(*source))
                 openPlaylistSource(*source);
@@ -2595,7 +2597,7 @@ void MainWindow::shufflePlaylist(uint64_t playlist_id) {
         return;
 
     playlist->playlist.shuffle();
-    pending_end_of_track_advance_ = false;
+    clearPendingEndOfTrackAdvance();
     seek_drag_progress_.reset();
     notifyPlaylistStructureChanged(playlist_id);
     status_message_ = std::format("Shuffled {}.", playlist->name);
@@ -2610,7 +2612,7 @@ void MainWindow::openTrackAt(uint64_t playlist_id, size_t index) {
     if (!document || index >= document->playlist.size())
         return;
 
-    pending_end_of_track_advance_ = false;
+    clearPendingEndOfTrackAdvance();
     seek_drag_progress_.reset();
     document->playlist.setCurrentIndex(index);
     clearPlaylistSelection(playlist_id);
@@ -2712,11 +2714,26 @@ void MainWindow::notifyPlaylistStructureChanged() {
 }
 
 void MainWindow::notifyPlaylistStructureChanged(uint64_t playlist_id) {
-    pending_end_of_track_advance_ = false;
+    clearPendingEndOfTrackAdvance();
     if (auto* document = playlistDocument(playlist_id)) {
         ++document->revision;
         syncPlaylistRevision(playlist_id);
     }
+}
+
+void MainWindow::clearPendingEndOfTrackAdvance() {
+    pending_end_of_track_advance_ = false;
+    pending_end_of_track_track_.reset();
+}
+
+void MainWindow::syncPendingEndOfTrackAdvanceWithNowPlaying() {
+    if (!pending_end_of_track_advance_)
+        return;
+
+    if (playbackTrackInstanceMatches(pending_end_of_track_track_, frame_now_playing_))
+        return;
+
+    clearPendingEndOfTrackAdvance();
 }
 
 void MainWindow::syncPlaylistRevision(uint64_t playlist_id) {
@@ -2976,7 +2993,7 @@ void MainWindow::closePlaylist(uint64_t playlist_id) {
     app_.forgetPlaylist(playlist_id);
     if (playbackPlaylistId() == playlist_id) {
         app_.commandStop();
-        pending_end_of_track_advance_ = false;
+        clearPendingEndOfTrackAdvance();
         seek_drag_progress_.reset();
     }
 
@@ -3082,6 +3099,7 @@ void MainWindow::scheduleGaplessAdvanceTrack() {
 
     const PlaylistItem& next = playlist->playlist.tracks()[*next_index];
     pending_end_of_track_advance_ = true;
+    pending_end_of_track_track_ = playbackTrackInstance(frame_now_playing_);
     const bool can_gapless = frame_now_playing_ &&
         frame_now_playing_->track_info &&
         !frame_now_playing_->track_info->is_stream &&
@@ -3101,7 +3119,7 @@ void MainWindow::openNextTrack() {
     if (!next_index)
         return;
 
-    pending_end_of_track_advance_ = false;
+    clearPendingEndOfTrackAdvance();
     seek_drag_progress_.reset();
     clearPlaylistSelection(playlist->id);
     auto& view_state = playlist_view_states_[playlist->id];
@@ -3124,7 +3142,7 @@ void MainWindow::openPrevTrack() {
     if (!prev_index)
         return;
 
-    pending_end_of_track_advance_ = false;
+    clearPendingEndOfTrackAdvance();
     seek_drag_progress_.reset();
     clearPlaylistSelection(playlist->id);
     auto& view_state = playlist_view_states_[playlist->id];

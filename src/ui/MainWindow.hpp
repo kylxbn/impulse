@@ -4,6 +4,7 @@
 #include "app/Application.hpp"
 #include "browser/FileBrowser.hpp"
 #include "core/MediaSource.hpp"
+#include "core/PlaybackStatusUtils.hpp"
 #include "mpris/MprisService.hpp"
 #include "playlist/PlaylistWorkspace.hpp"
 
@@ -179,6 +180,8 @@ private:
     [[nodiscard]] std::optional<size_t> manualAdvanceIndex(const PlaylistDocument& playlist,
                                                            bool forward) const;
 
+    void clearPendingEndOfTrackAdvance();
+    void syncPendingEndOfTrackAdvanceWithNowPlaying();
     void syncAlbumArtTexture(const std::shared_ptr<const TrackInfo>& info);
     void scheduleGaplessAdvanceTrack();
     void openNextTrack();
@@ -254,6 +257,7 @@ private:
     float bitrate_bar_peak_kbps_ = 0.0f;
     std::shared_ptr<const TrackInfo> bitrate_peak_track_;
     bool pending_end_of_track_advance_ = false;
+    std::optional<PlaybackTrackInstance> pending_end_of_track_track_;
     bool pending_error_advance_ = false;
     std::optional<int64_t> pending_mpris_seek_target_us_;
     std::string            pending_mpris_seek_track_id_;
