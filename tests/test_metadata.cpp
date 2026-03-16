@@ -233,3 +233,28 @@ TEST_CASE("MetadataReader - can skip album art during bulk metadata scans") {
     CHECK(!ffmpegAnalysisValue(info, "Album art attached").has_value());
     CHECK(!ffmpegAnalysisValue(info, "Album art external file").has_value());
 }
+
+TEST_CASE("MetadataReader - consecutive reads reuse the same external album art safely") {
+    static constexpr std::string_view kTinyPngBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9BUPFygAAAABJRU5ErkJggg==";
+
+    const auto temp_root = prepareTempRoot("album_art_consecutive_reads");
+    const auto first_track = createTestWaveFile(temp_root, "track-a.wav");
+    const auto second_track = createTestWaveFile(temp_root, "track-b.wav");
+    const auto external_art = temp_root / "Cover.png";
+    writeBinaryFile(external_art, decodeBase64(kTinyPngBase64));
+
+    auto first_result = MetadataReader::read(first_track);
+    REQUIRE(first_result.has_value());
+    CHECK(first_result->album_art_width == 1);
+    CHECK(first_result->album_art_height == 1);
+    CHECK(first_result->external_album_art_path == external_art);
+    CHECK(first_result->album_art_rgba.size() == 4);
+
+    auto second_result = MetadataReader::read(second_track);
+    REQUIRE(second_result.has_value());
+    CHECK(second_result->album_art_width == 1);
+    CHECK(second_result->album_art_height == 1);
+    CHECK(second_result->external_album_art_path == external_art);
+    CHECK(second_result->album_art_rgba.size() == 4);
+}
