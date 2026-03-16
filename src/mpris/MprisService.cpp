@@ -2,20 +2,24 @@
 
 #include <systemd/sd-bus.h>
 
+#include <poll.h>
+#include <sys/eventfd.h>
+
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <cstdint>
 #include <cmath>
 #include <cstdlib>
 #include <format>
+#include <limits>
 #include <string_view>
+#include <time.h>
 #include <unistd.h>
 #include <utility>
 #include <vector>
 
 namespace {
-
-constexpr uint64_t kBusPollIntervalUsec = 100'000;
 
 const sd_bus_vtable kRootVTable[] = {
     SD_BUS_VTABLE_START(0),
@@ -117,6 +121,51 @@ MprisCommand makeCommand(MprisCommandType type) {
     return command;
 }
 
+bool affectsEmittedPlayerProperties(const MprisSnapshot& lhs, const MprisSnapshot& rhs) {
+    return lhs.playback_status != rhs.playback_status ||
+           lhs.loop_status != rhs.loop_status ||
+           lhs.shuffle != rhs.shuffle ||
+           lhs.can_go_next != rhs.can_go_next ||
+           lhs.can_go_previous != rhs.can_go_previous ||
+           lhs.can_play != rhs.can_play ||
+           lhs.can_pause != rhs.can_pause ||
+           lhs.can_seek != rhs.can_seek ||
+           lhs.can_control != rhs.can_control ||
+           lhs.rate != rhs.rate ||
+           lhs.minimum_rate != rhs.minimum_rate ||
+           lhs.maximum_rate != rhs.maximum_rate ||
+           lhs.volume != rhs.volume ||
+           !(lhs.track == rhs.track);
+}
+
+int busTimeoutToPollTimeoutMs(uint64_t bus_timeout_usec) {
+    if (bus_timeout_usec == UINT64_MAX)
+        return -1;
+
+    timespec now{};
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+        return 0;
+
+    const uint64_t now_usec =
+        static_cast<uint64_t>(now.tv_sec) * 1'000'000u +
+        static_cast<uint64_t>(now.tv_nsec / 1'000u);
+    if (bus_timeout_usec <= now_usec)
+        return 0;
+
+    const uint64_t delta_usec = bus_timeout_usec - now_usec;
+    const uint64_t timeout_ms = (delta_usec + 999u) / 1'000u;
+    return static_cast<int>(std::min<uint64_t>(timeout_ms,
+                                               static_cast<uint64_t>(std::numeric_limits<int>::max())));
+}
+
+void drainWakeFd(int fd) {
+    if (fd < 0)
+        return;
+
+    uint64_t value = 0;
+    while (read(fd, &value, sizeof(value)) == sizeof(value)) {}
+}
+
 }  // namespace
 
 MprisService::MprisService() {
@@ -143,6 +192,7 @@ void MprisService::shutdown() {
 
     if (bus_thread_.joinable()) {
         bus_thread_.request_stop();
+        signalBusThread();
         bus_thread_.join();
     }
 
@@ -158,18 +208,27 @@ void MprisService::shutdown() {
         sd_bus_flush_close_unref(bus_);
         bus_ = nullptr;
     }
+    if (wake_fd_ >= 0) {
+        close(wake_fd_);
+        wake_fd_ = -1;
+    }
 
     active_.store(false, std::memory_order_relaxed);
 }
 
 void MprisService::publishSnapshot(MprisSnapshot snapshot) {
+    bool should_signal = false;
     std::scoped_lock lock(mutex_);
+    should_signal = affectsEmittedPlayerProperties(snapshot_, snapshot);
     snapshot_ = std::move(snapshot);
+    if (should_signal)
+        signalBusThread();
 }
 
 void MprisService::notifySeeked(int64_t position_us) {
     std::scoped_lock lock(mutex_);
     pending_seeked_positions_.push_back(std::max<int64_t>(0, position_us));
+    signalBusThread();
 }
 
 std::vector<MprisCommand> MprisService::takePendingCommands() {
@@ -184,6 +243,10 @@ bool MprisService::initialize() {
         return false;
 
     sd_bus_set_exit_on_disconnect(bus_, 0);
+
+    wake_fd_ = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (wake_fd_ < 0)
+        return false;
 
     if (sd_bus_add_object_vtable(bus_,
                                  &root_slot_,
@@ -224,6 +287,15 @@ bool MprisService::initialize() {
     return true;
 }
 
+void MprisService::signalBusThread() noexcept {
+    if (wake_fd_ < 0)
+        return;
+
+    const uint64_t wake_value = 1;
+    const ssize_t written = write(wake_fd_, &wake_value, sizeof(wake_value));
+    (void) written;
+}
+
 void MprisService::runLoop(std::stop_token stop_token) {
     MprisSnapshot last_snapshot{};
     bool          has_last_snapshot = false;
@@ -250,10 +322,53 @@ void MprisService::runLoop(std::stop_token stop_token) {
             return;
         }
 
-        const int ret = sd_bus_wait(bus_, kBusPollIntervalUsec);
+        const int bus_fd = sd_bus_get_fd(bus_);
+        if (bus_fd < 0) {
+            active_.store(false, std::memory_order_relaxed);
+            return;
+        }
+
+        const int bus_events = sd_bus_get_events(bus_);
+        if (bus_events < 0) {
+            active_.store(false, std::memory_order_relaxed);
+            return;
+        }
+
+        uint64_t bus_timeout_usec = UINT64_MAX;
+        int ret = sd_bus_get_timeout(bus_, &bus_timeout_usec);
         if (ret < 0) {
             active_.store(false, std::memory_order_relaxed);
             return;
+        }
+
+        std::array<pollfd, 2> poll_fds{};
+        nfds_t poll_count = 0;
+        poll_fds[poll_count++] = pollfd{
+            .fd = bus_fd,
+            .events = static_cast<short>(bus_events),
+            .revents = 0,
+        };
+        if (wake_fd_ >= 0) {
+            poll_fds[poll_count++] = pollfd{
+                .fd = wake_fd_,
+                .events = POLLIN,
+                .revents = 0,
+            };
+        }
+
+        ret = poll(poll_fds.data(),
+                   poll_count,
+                   busTimeoutToPollTimeoutMs(bus_timeout_usec));
+        if (ret < 0) {
+            if (errno == EINTR)
+                continue;
+            active_.store(false, std::memory_order_relaxed);
+            return;
+        }
+
+        if (wake_fd_ >= 0 && poll_fds[poll_count - 1].fd == wake_fd_ &&
+            (poll_fds[poll_count - 1].revents & POLLIN)) {
+            drainWakeFd(wake_fd_);
         }
     }
 
