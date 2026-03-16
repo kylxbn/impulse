@@ -68,16 +68,18 @@ PlaylistItem PlaylistManager::makeItem(uint64_t id,
         item.codec            = info->codec_name;
         item.duration_seconds = info->duration_seconds;
         item.bitrate_bps      = info->bitrate_bps;
-        item.replay_gain_db   = info->rg_track_gain_db;
-        item.replay_gain_peak = info->rg_track_peak;
+        item.track_replay_gain_db = info->rg_track_gain_db;
+        item.album_replay_gain_db = info->rg_album_gain_db;
+        item.track_replay_gain_peak = info->rg_track_peak;
+        item.album_replay_gain_peak = info->rg_album_peak;
         recomputePlr(item);
     }
     return item;
 }
 
 void PlaylistManager::recomputePlr(PlaylistItem& item) const {
-    item.plr_lu = ReplayGain::plrLu(item.replay_gain_db,
-                                    item.replay_gain_peak,
+    item.plr_lu = ReplayGain::plrLu(item.track_replay_gain_db,
+                                    item.track_replay_gain_peak,
                                     plr_reference_lufs_);
 }
 
@@ -267,8 +269,8 @@ void PlaylistManager::sortBy(PlaylistSortKey key, PlaylistSortDirection directio
             case PlaylistSortKey::Bitrate:
                 return compareMaybeDescending(lhs.bitrate_bps, rhs.bitrate_bps, direction);
             case PlaylistSortKey::ReplayGain:
-                return compareMaybeDescending(lhs.replay_gain_db.value_or(0.0f),
-                                              rhs.replay_gain_db.value_or(0.0f),
+                return compareMaybeDescending(lhs.track_replay_gain_db.value_or(0.0f),
+                                              rhs.track_replay_gain_db.value_or(0.0f),
                                               direction);
             case PlaylistSortKey::PLR:
                 return compareMaybeDescending(lhs.plr_lu.value_or(0.0f),
