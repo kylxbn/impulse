@@ -3,6 +3,7 @@
 #include "app/AppSettings.hpp"
 #include "app/Application.hpp"
 #include "browser/FileBrowser.hpp"
+#include "core/Lyrics.hpp"
 #include "core/MediaSource.hpp"
 #include "core/PlaybackStatusUtils.hpp"
 #include "mpris/MprisService.hpp"
@@ -88,6 +89,7 @@ private:
     void renderPlaylistWindow();
     void renderTransportWindow();
     void renderInspectorWindow();
+    void renderLyricsWindow();
     void renderAlbumArtWindow();
     void renderSettingsWindow();
     void renderRenamePlaylistPopup();
@@ -183,6 +185,7 @@ private:
     void clearPendingEndOfTrackAdvance();
     void syncPendingEndOfTrackAdvanceWithNowPlaying();
     void syncAlbumArtTexture(const std::shared_ptr<const TrackInfo>& info);
+    void syncLyricsDocument(const std::shared_ptr<const TrackInfo>& info);
     void scheduleGaplessAdvanceTrack();
     void openNextTrack();
     void openPrevTrack();
@@ -227,6 +230,10 @@ private:
     int               album_art_tex_w_   = 0;
     int               album_art_tex_h_   = 0;
     std::shared_ptr<const TrackInfo> last_track_info_;
+    std::shared_ptr<const TrackInfo> lyrics_track_info_;
+    LyricsDocument                  lyrics_document_;
+    std::optional<size_t>           last_active_timed_lyric_line_;
+    bool                            lyrics_should_autoscroll_ = false;
 
     std::filesystem::path browser_selected_path_;
     std::vector<std::filesystem::path> pending_external_drop_paths_;
@@ -254,6 +261,7 @@ private:
     bool show_playlist_window_  = true;
     bool show_transport_window_ = true;
     bool show_inspector_window_ = true;
+    bool show_lyrics_window_    = true;
     bool show_album_art_window_ = false;
     bool show_settings_window_  = false;
 

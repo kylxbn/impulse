@@ -1,6 +1,7 @@
 add_executable(impulse
     main.cpp
     core/MediaSource.cpp
+    core/Lyrics.cpp
     app/Application.cpp
     app/SettingsStorage.cpp
     app/SessionStorage.cpp

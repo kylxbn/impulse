@@ -68,6 +68,7 @@ add_test(NAME test_file_browser COMMAND test_file_browser)
 add_executable(test_metadata
     test_metadata.cpp
     ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/Lyrics.cpp
     ${CMAKE_SOURCE_DIR}/src/metadata/MetadataReader.cpp)
 target_include_directories(test_metadata PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -76,9 +77,21 @@ target_link_libraries(test_metadata PRIVATE PkgConfig::LIBAV)
 target_compile_features(test_metadata PRIVATE cxx_std_23)
 add_test(NAME test_metadata COMMAND test_metadata)
 
+add_executable(test_lyrics
+    test_lyrics.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/Lyrics.cpp)
+target_include_directories(test_lyrics PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${doctest_SOURCE_DIR}/doctest)
+target_link_libraries(test_lyrics PRIVATE readerwriterqueue)
+target_compile_features(test_lyrics PRIVATE cxx_std_23)
+add_test(NAME test_lyrics COMMAND test_lyrics)
+
 add_executable(test_decoder
     test_decoder.cpp
     ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/Lyrics.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/Decoder.cpp
     ${CMAKE_SOURCE_DIR}/src/metadata/MetadataReader.cpp)
 target_include_directories(test_decoder PRIVATE

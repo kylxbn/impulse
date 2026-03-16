@@ -1,5 +1,7 @@
 #include "MetadataReader.hpp"
 
+#include "core/Lyrics.hpp"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -85,6 +87,21 @@ std::string toLower(std::string_view value) {
     for (unsigned char ch : value)
         lowered.push_back(static_cast<char>(std::tolower(ch)));
     return lowered;
+}
+
+std::string dictGetCaseInsensitive(AVDictionary* dict, std::string_view key) {
+    if (!dict)
+        return {};
+
+    const std::string lowered_key = toLower(key);
+    AVDictionaryEntry* entry = nullptr;
+    while ((entry = av_dict_get(dict, "", entry, AV_DICT_IGNORE_SUFFIX))) {
+        if (!entry->key || !entry->value)
+            continue;
+        if (toLower(entry->key) == lowered_key)
+            return entry->value;
+    }
+    return {};
 }
 
 int albumArtNamePriority(std::string_view stem) {
@@ -332,6 +349,14 @@ decodeExternalAlbumArt(const std::filesystem::path& track_path, TrackInfo& info)
     return std::nullopt;
 }
 
+std::string readEmbeddedLyrics(AVDictionary* stream_dict,
+                               AVDictionary* format_dict) {
+    std::string lyrics = dictGetCaseInsensitive(stream_dict, "lyrics");
+    if (lyrics.empty())
+        lyrics = dictGetCaseInsensitive(format_dict, "lyrics");
+    return lyrics;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -466,6 +491,26 @@ MetadataReader::read(const MediaSource& source,
     appendDictionaryFields(info.format_metadata, fmt_ctx->metadata);
     parseTags(fmt_ctx->metadata, info);
     if (audio_idx < 0) parseReplayGain(nullptr, fmt_ctx->metadata, info);
+
+    const LyricsContent lyrics =
+        selectLyricsContent(readEmbeddedLyrics(audio_idx >= 0 ? fmt_ctx->streams[audio_idx]->metadata : nullptr,
+                                              fmt_ctx->metadata),
+                            source);
+    info.lyrics = lyrics.text;
+    info.lyrics_source_kind = lyrics.source_kind;
+    info.lyrics_source_path = lyrics.source_path;
+    switch (lyrics.source_kind) {
+        case LyricsSourceKind::EmbeddedTag:
+            appendField(info.ffmpeg_analysis, "Lyrics source", "embedded LYRICS tag");
+            break;
+        case LyricsSourceKind::SidecarFile:
+            appendField(info.ffmpeg_analysis, "Lyrics source",
+                        std::format("sidecar file ({})", lyrics.source_path.filename().string()));
+            break;
+        case LyricsSourceKind::None:
+        default:
+            break;
+    }
 
     // Album art
     if (options.decode_album_art) {

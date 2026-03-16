@@ -234,6 +234,29 @@ TEST_CASE("MetadataReader - can skip album art during bulk metadata scans") {
     CHECK(!ffmpegAnalysisValue(info, "Album art external file").has_value());
 }
 
+TEST_CASE("MetadataReader - falls back to sidecar lyrics files in the track directory") {
+    const auto temp_root = prepareTempRoot("lyrics_fallback");
+    const auto copied_track = createTestWaveFile(temp_root, "fixture.wav");
+    const auto sidecar_lyrics = temp_root / "fixture.lrc";
+
+    {
+        std::ofstream out(sidecar_lyrics, std::ios::binary);
+        REQUIRE(out.good());
+        out << "[00:01.00]Hello\n[00:03.00]world";
+        REQUIRE(out.good());
+    }
+
+    auto result = MetadataReader::read(copied_track);
+    REQUIRE(result.has_value());
+
+    const TrackInfo& info = result.value();
+    CHECK(info.lyrics == "[00:01.00]Hello\n[00:03.00]world");
+    CHECK(info.lyrics_source_kind == LyricsSourceKind::SidecarFile);
+    CHECK(info.lyrics_source_path == sidecar_lyrics);
+    CHECK(ffmpegAnalysisValue(info, "Lyrics source") ==
+          std::optional<std::string>{std::format("sidecar file ({})", sidecar_lyrics.filename().string())});
+}
+
 TEST_CASE("MetadataReader - consecutive reads reuse the same external album art safely") {
     static constexpr std::string_view kTinyPngBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9BUPFygAAAABJRU5ErkJggg==";
