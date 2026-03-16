@@ -41,8 +41,10 @@ struct PlaylistItem {
     std::string           codec;
     double                duration_seconds = 0.0;
     int64_t               bitrate_bps = 0;
-    std::optional<float>  replay_gain_db;
-    std::optional<float>  replay_gain_peak;
+    std::optional<float>  track_replay_gain_db;
+    std::optional<float>  album_replay_gain_db;
+    std::optional<float>  track_replay_gain_peak;
+    std::optional<float>  album_replay_gain_peak;
     std::optional<float>  plr_lu;
 
     [[nodiscard]] std::string displayTitle() const;

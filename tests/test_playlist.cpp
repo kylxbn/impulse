@@ -106,6 +106,28 @@ TEST_CASE("PlaylistManager recomputes PLR when the reference LUFS changes") {
     CHECK(*playlist.tracks()[0].plr_lu == doctest::Approx(10.9794f).epsilon(0.0001));
 }
 
+TEST_CASE("PlaylistManager retains track and album ReplayGain metadata") {
+    PlaylistManager playlist;
+    TrackInfo info{};
+    info.title = "Track";
+    info.rg_track_gain_db = -12.72f;
+    info.rg_album_gain_db = -13.10f;
+    info.rg_track_peak = 1.0f;
+    info.rg_album_peak = 0.98f;
+
+    playlist.addTrack("/music/track.wv", &info);
+
+    REQUIRE(playlist.size() == 1);
+    REQUIRE(playlist.tracks()[0].track_replay_gain_db.has_value());
+    REQUIRE(playlist.tracks()[0].album_replay_gain_db.has_value());
+    REQUIRE(playlist.tracks()[0].track_replay_gain_peak.has_value());
+    REQUIRE(playlist.tracks()[0].album_replay_gain_peak.has_value());
+    CHECK(*playlist.tracks()[0].track_replay_gain_db == doctest::Approx(-12.72f));
+    CHECK(*playlist.tracks()[0].album_replay_gain_db == doctest::Approx(-13.10f));
+    CHECK(*playlist.tracks()[0].track_replay_gain_peak == doctest::Approx(1.0f));
+    CHECK(*playlist.tracks()[0].album_replay_gain_peak == doctest::Approx(0.98f));
+}
+
 TEST_CASE("PlaylistWorkspace keeps at least one playlist and switches the active tab") {
     PlaylistWorkspace workspace;
 

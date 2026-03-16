@@ -129,6 +129,17 @@ bool sameSharedOwner(const std::shared_ptr<T>& lhs,
     return !lhs.owner_before(rhs) && !rhs.owner_before(lhs);
 }
 
+ReplayGain::GainApplication replayGainApplicationForItem(const PlaylistItem& item,
+                                                         const AppSettings& settings) {
+    return ReplayGain::gainApplication(item.track_replay_gain_db,
+                                       item.album_replay_gain_db,
+                                       item.track_replay_gain_peak,
+                                       item.album_replay_gain_peak,
+                                       settings.replayGainSettings());
+}
+
+const ImVec4 kReplayGainClipTextColor(0.92f, 0.32f, 0.28f, 1.0f);
+
 std::string playlistFileDialogName(std::string_view playlist_name) {
     std::string sanitized;
     sanitized.reserve(playlist_name.size());
@@ -1334,10 +1345,15 @@ void MainWindow::renderPlaylistWindow() {
             ImGui::TableSetColumnIndex(6);
             ImGui::TextUnformatted(formatKbpsValue(item.bitrate_bps).c_str());
             ImGui::TableSetColumnIndex(7);
-            if (item.replay_gain_db)
-                ImGui::Text("%.1f", *item.replay_gain_db);
-            else
-                ImGui::TextUnformatted("--");
+            const ReplayGain::GainApplication rg_application =
+                replayGainApplicationForItem(item, settings_);
+            const bool replaygain_would_clip =
+                ReplayGain::wouldClip(rg_application).value_or(false);
+            if (replaygain_would_clip)
+                ImGui::PushStyleColor(ImGuiCol_Text, kReplayGainClipTextColor);
+            ImGui::Text("%.1f", rg_application.applied_gain_db);
+            if (replaygain_would_clip)
+                ImGui::PopStyleColor();
             ImGui::TableSetColumnIndex(8);
             if (item.plr_lu)
                 ImGui::Text("%.1f", *item.plr_lu);
