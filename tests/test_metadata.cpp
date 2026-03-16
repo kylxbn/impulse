@@ -211,3 +211,25 @@ TEST_CASE("MetadataReader - falls back to album art files in the track directory
     CHECK(ffmpegAnalysisValue(info, "Album art external file") ==
           std::optional<std::string>{external_art.filename().string()});
 }
+
+TEST_CASE("MetadataReader - can skip album art during bulk metadata scans") {
+    static constexpr std::string_view kTinyPngBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9BUPFygAAAABJRU5ErkJggg==";
+
+    const auto temp_root = prepareTempRoot("album_art_skip");
+    const auto copied_track = createTestWaveFile(temp_root, "fixture.wav");
+
+    const auto external_art = temp_root / "Cover.png";
+    writeBinaryFile(external_art, decodeBase64(kTinyPngBase64));
+
+    auto result = MetadataReader::read(copied_track, MetadataReadOptions{.decode_album_art = false});
+    REQUIRE(result.has_value());
+
+    const TrackInfo& info = result.value();
+    CHECK(info.album_art_width == 0);
+    CHECK(info.album_art_height == 0);
+    CHECK(info.album_art_rgba.empty());
+    CHECK(info.external_album_art_path.empty());
+    CHECK(!ffmpegAnalysisValue(info, "Album art attached").has_value());
+    CHECK(!ffmpegAnalysisValue(info, "Album art external file").has_value());
+}

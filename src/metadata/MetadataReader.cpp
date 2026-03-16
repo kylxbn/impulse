@@ -310,7 +310,8 @@ decodeExternalAlbumArt(const std::filesystem::path& track_path, TrackInfo& info)
 // ---------------------------------------------------------------------------
 
 std::expected<TrackInfo, std::string>
-MetadataReader::read(const MediaSource& source) {
+MetadataReader::read(const MediaSource& source,
+                     MetadataReadOptions options) {
     AVFormatContext* fmt_ctx = nullptr;
     const std::string input = source.string();
 
@@ -438,28 +439,31 @@ MetadataReader::read(const MediaSource& source) {
     if (audio_idx < 0) parseReplayGain(nullptr, fmt_ctx->metadata, info);
 
     // Album art
-    const bool has_embedded_album_art = decodeAlbumArt(fmt_ctx, info);
-    const auto external_album_art = has_embedded_album_art || source.isUrl()
-        ? std::optional<std::filesystem::path>{}
-        : decodeExternalAlbumArt(source.path, info);
-    if (external_album_art)
-        info.external_album_art_path = *external_album_art;
-    appendField(info.ffmpeg_analysis, "Album art attached",
-                has_embedded_album_art ? "yes" : "no");
-    if (external_album_art)
-        appendField(info.ffmpeg_analysis, "Album art external file",
-                    external_album_art->filename().string());
-    if (!info.album_art_rgba.empty())
-        appendField(info.ffmpeg_analysis, "Album art size",
-                    std::format("{}x{}", info.album_art_width, info.album_art_height));
+    if (options.decode_album_art) {
+        const bool has_embedded_album_art = decodeAlbumArt(fmt_ctx, info);
+        const auto external_album_art = has_embedded_album_art || source.isUrl()
+            ? std::optional<std::filesystem::path>{}
+            : decodeExternalAlbumArt(source.path, info);
+        if (external_album_art)
+            info.external_album_art_path = *external_album_art;
+        appendField(info.ffmpeg_analysis, "Album art attached",
+                    has_embedded_album_art ? "yes" : "no");
+        if (external_album_art)
+            appendField(info.ffmpeg_analysis, "Album art external file",
+                        external_album_art->filename().string());
+        if (!info.album_art_rgba.empty())
+            appendField(info.ffmpeg_analysis, "Album art size",
+                        std::format("{}x{}", info.album_art_width, info.album_art_height));
+    }
 
     avformat_close_input(&fmt_ctx);
     return info;
 }
 
 std::expected<TrackInfo, std::string>
-MetadataReader::read(const std::filesystem::path& path) {
-    return read(MediaSource::fromPath(path));
+MetadataReader::read(const std::filesystem::path& path,
+                     MetadataReadOptions options) {
+    return read(MediaSource::fromPath(path), options);
 }
 
 // ---------------------------------------------------------------------------

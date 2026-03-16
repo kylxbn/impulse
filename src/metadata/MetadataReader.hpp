@@ -10,15 +10,21 @@
 struct AVDictionary;
 struct AVFormatContext;
 
+struct MetadataReadOptions {
+    bool decode_album_art = true;
+};
+
 class MetadataReader {
 public:
     // Synchronous: opens the file, extracts all metadata, closes it.
     // Call from the decode thread before starting playback.
     static std::expected<TrackInfo, std::string>
-    read(const MediaSource& source);
+    read(const MediaSource& source,
+         MetadataReadOptions options = {});
 
     static std::expected<TrackInfo, std::string>
-    read(const std::filesystem::path& path);
+    read(const std::filesystem::path& path,
+         MetadataReadOptions options = {});
 
 private:
     static void parseTags(AVDictionary* dict, TrackInfo& info);
