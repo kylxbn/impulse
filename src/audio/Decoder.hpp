@@ -88,6 +88,11 @@ private:
     bool    track_info_dirty_ = false;
     std::string live_metadata_signature_;
 
-    AudioFormat out_fmt_;
-    TrackInfo   track_info_;
+    bool resampleInto(std::vector<float>& buf,
+                      const uint8_t* const* input_data,
+                      int input_samples);
+
+    AudioFormat        out_fmt_;
+    TrackInfo          track_info_;
+    std::vector<float> resample_buf_;
 };
