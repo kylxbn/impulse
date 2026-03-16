@@ -17,7 +17,6 @@ extern "C" {
 #include "metadata/MetadataReader.hpp"
 
 #include <cmath>
-#include <cstring>
 #include <format>
 #include <ranges>
 
@@ -148,47 +147,6 @@ std::string buildLiveMetadataSignature(const TrackInfo& info) {
     return signature;
 }
 
-std::optional<std::vector<float>>
-resampleToPackedFloat(SwrContext*                swr_ctx,
-                      int                        channels,
-                      const uint8_t* const*      input_data,
-                      int                        input_samples) {
-    const int max_output_samples = swr_get_out_samples(swr_ctx, input_samples);
-    if (max_output_samples < 0)
-        return std::nullopt;
-    if (max_output_samples == 0)
-        return std::vector<float>{};
-
-    uint8_t** output_data = nullptr;
-    int output_linesize = 0;
-    if (av_samples_alloc_array_and_samples(&output_data,
-                                           &output_linesize,
-                                           channels,
-                                           max_output_samples,
-                                           AV_SAMPLE_FMT_FLT,
-                                           0) < 0) {
-        return std::nullopt;
-    }
-
-    const int output_samples =
-        swr_convert(swr_ctx, output_data, max_output_samples, input_data, input_samples);
-    if (output_samples < 0) {
-        av_freep(&output_data[0]);
-        av_freep(&output_data);
-        return std::nullopt;
-    }
-
-    std::vector<float> pcm(static_cast<size_t>(output_samples * channels));
-    if (!pcm.empty()) {
-        std::memcpy(pcm.data(),
-                    output_data[0],
-                    pcm.size() * sizeof(float));
-    }
-
-    av_freep(&output_data[0]);
-    av_freep(&output_data);
-    return pcm;
-}
 
 }  // namespace
 
@@ -373,6 +331,10 @@ bool Decoder::initResampler() {
         return false;
     }
 
+    // Prefer soxr for better stopband rejection and phase linearity.
+    // Falls back to the default SWR engine silently if soxr wasn't compiled in.
+    av_opt_set_int(swr_ctx_, "engine", SWR_ENGINE_SOXR, 0);
+
     if (swr_init(swr_ctx_) < 0) {
         swr_free(&swr_ctx_);
         return false;
@@ -391,6 +353,30 @@ void Decoder::freeResampler() {
     if (swr_ctx_) { swr_free(&swr_ctx_); swr_ctx_ = nullptr; }
 }
 
+// AV_SAMPLE_FMT_FLT is packed (interleaved), so swr_convert only uses one plane.
+// We can pass a pointer into our own pre-grown buffer directly — no av_malloc needed.
+// FFmpeg docs explicitly state no alignment requirement for swr_convert output buffers.
+bool Decoder::resampleInto(std::vector<float>& buf,
+                           const uint8_t* const* input_data,
+                           int input_samples) {
+    const int max_out = swr_get_out_samples(swr_ctx_, input_samples);
+    if (max_out < 0) return false;
+
+    buf.clear();
+    if (max_out == 0) return true;
+
+    buf.resize(static_cast<size_t>(max_out) * out_fmt_.channels);
+    uint8_t* out_ptr = reinterpret_cast<uint8_t*>(buf.data());
+    const int got = swr_convert(swr_ctx_, &out_ptr, max_out, input_data, input_samples);
+    if (got < 0) {
+        buf.clear();
+        return false;
+    }
+
+    buf.resize(static_cast<size_t>(got) * out_fmt_.channels);
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 int Decoder::decodeNextFrames(std::vector<float>& out_pcm) {
     if (!fmt_ctx_ || !codec_ctx_ || !swr_ctx_) return -1;
@@ -404,29 +390,25 @@ int Decoder::decodeNextFrames(std::vector<float>& out_pcm) {
             const auto frame_skip_samples =
                 manual_skip_export_enabled_ ? readFrameSkipSamples(frame_) : std::nullopt;
 
-            auto frame_pcm = resampleToPackedFloat(
-                swr_ctx_,
-                out_fmt_.channels,
-                const_cast<const uint8_t* const*>(frame_->extended_data),
-                frame_->nb_samples);
-            if (!frame_pcm) {
+            if (!resampleInto(resample_buf_,
+                              const_cast<const uint8_t* const*>(frame_->extended_data),
+                              frame_->nb_samples)) {
                 av_frame_unref(frame_);
                 return -1;
             }
 
             if (frame_skip_samples) {
-                gapless_trimmer_.applyExplicitFrameTrim(*frame_pcm,
+                gapless_trimmer_.applyExplicitFrameTrim(resample_buf_,
                                                         codec_ctx_->sample_rate,
                                                         frame_skip_samples->start_skip_samples,
                                                         frame_skip_samples->end_skip_samples);
             } else if (!manual_skip_export_enabled_) {
-                gapless_trimmer_.applyFallbackTrim(*frame_pcm, false);
+                gapless_trimmer_.applyFallbackTrim(resample_buf_, false);
             }
 
-            if (!frame_pcm->empty()) {
-                ReplayGain::apply(std::span<float>(frame_pcm->data(), frame_pcm->size()),
-                                  replay_gain_scale_);
-                out_pcm.insert(out_pcm.end(), frame_pcm->begin(), frame_pcm->end());
+            if (!resample_buf_.empty()) {
+                ReplayGain::apply(std::span<float>(resample_buf_), replay_gain_scale_);
+                out_pcm.insert(out_pcm.end(), resample_buf_.begin(), resample_buf_.end());
             }
             av_frame_unref(frame_);
 
@@ -471,17 +453,15 @@ int Decoder::decodeNextFrames(std::vector<float>& out_pcm) {
         }
 
         if (ret == AVERROR_EOF) {
-            auto flush_pcm = resampleToPackedFloat(swr_ctx_, out_fmt_.channels, nullptr, 0);
-            if (!flush_pcm)
+            if (!resampleInto(resample_buf_, nullptr, 0))
                 return -1;
 
             if (!manual_skip_export_enabled_)
-                gapless_trimmer_.applyFallbackTrim(*flush_pcm, true);
+                gapless_trimmer_.applyFallbackTrim(resample_buf_, true);
 
-            if (!flush_pcm->empty()) {
-                ReplayGain::apply(std::span<float>(flush_pcm->data(), flush_pcm->size()),
-                                      replay_gain_scale_);
-                out_pcm.insert(out_pcm.end(), flush_pcm->begin(), flush_pcm->end());
+            if (!resample_buf_.empty()) {
+                ReplayGain::apply(std::span<float>(resample_buf_), replay_gain_scale_);
+                out_pcm.insert(out_pcm.end(), resample_buf_.begin(), resample_buf_.end());
             }
 
             if (!out_pcm.empty())
