@@ -2,6 +2,7 @@
 
 #include "app/SettingsStorage.hpp"
 #include "app/SessionStorage.hpp"
+#include "core/Lyrics.hpp"
 #include "metadata/MetadataReader.hpp"
 #include "playlist/M3U8Playlist.hpp"
 
@@ -751,6 +752,7 @@ void MainWindow::renderLayout() {
     if (show_playlist_window_) renderPlaylistWindow();
     if (show_transport_window_) renderTransportWindow();
     if (show_inspector_window_) renderInspectorWindow();
+    if (show_lyrics_window_) renderLyricsWindow();
     if (show_album_art_window_) renderAlbumArtWindow();
     if (show_settings_window_) renderSettingsWindow();
 }
@@ -805,11 +807,14 @@ void MainWindow::buildDefaultDockLayout(ImGuiID dockspace_id) {
     ImGuiID center_id = lower_id;
     const ImGuiID left_id = ImGui::DockBuilderSplitNode(center_id, ImGuiDir_Left, 0.20f, nullptr, &center_id);
     const ImGuiID right_id = ImGui::DockBuilderSplitNode(center_id, ImGuiDir_Right, 0.22f, nullptr, &center_id);
+    ImGuiID lyrics_id = center_id;
+    const ImGuiID playlists_id = ImGui::DockBuilderSplitNode(lyrics_id, ImGuiDir_Up, 0.54f, nullptr, &lyrics_id);
 
     ImGui::DockBuilderDockWindow("Browser", left_id);
-    ImGui::DockBuilderDockWindow("Playlists", center_id);
+    ImGui::DockBuilderDockWindow("Playlists", playlists_id);
     ImGui::DockBuilderDockWindow("Transport", top_id);
     ImGui::DockBuilderDockWindow("Inspector", right_id);
+    ImGui::DockBuilderDockWindow("Lyrics", lyrics_id);
     ImGui::DockBuilderFinish(dockspace_id);
 
     dock_layout_built_ = true;
@@ -910,6 +915,7 @@ void MainWindow::renderMainMenu() {
         ImGui::MenuItem("Playlists", nullptr, &show_playlist_window_);
         ImGui::MenuItem("Transport", nullptr, &show_transport_window_);
         ImGui::MenuItem("Inspector", nullptr, &show_inspector_window_);
+        ImGui::MenuItem("Lyrics", nullptr, &show_lyrics_window_);
         ImGui::MenuItem("Album Art", nullptr, &show_album_art_window_);
         if (ImGui::MenuItem("Reset Dock Layout")) {
             request_layout_reset_ = true;
@@ -1636,6 +1642,83 @@ void MainWindow::renderInspectorWindow() {
     if (ImGui::CollapsingHeader("Metadata", ImGuiTreeNodeFlags_DefaultOpen))
         renderMetadataPanel();
 
+    ImGui::End();
+}
+
+void MainWindow::renderLyricsWindow() {
+    if (!ImGui::Begin("Lyrics", &show_lyrics_window_)) {
+        ImGui::End();
+        return;
+    }
+
+    auto info = frame_now_playing_ ? frame_now_playing_->track_info : nullptr;
+    syncLyricsDocument(info);
+
+    if (!info) {
+        ImGui::TextDisabled("No track loaded.");
+        ImGui::End();
+        return;
+    }
+
+    if (lyrics_document_.kind == LyricsKind::None) {
+        if (info->source.isFile()) {
+            ImGui::TextDisabled("No lyrics found in the LYRICS tag or %s.lrc.",
+                                info->source.stem().c_str());
+        } else {
+            ImGui::TextDisabled("No lyrics found in the current track metadata.");
+        }
+        ImGui::End();
+        return;
+    }
+
+    if (lyrics_document_.kind == LyricsKind::Untimed) {
+        ImGui::BeginChild("lyrics_untimed_scroll", ImVec2(0.0f, 0.0f));
+        ImGui::PushTextWrapPos(0.0f);
+        for (const std::string& line : lyrics_document_.untimed_lines) {
+            if (line.empty())
+                ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
+            else
+                ImGui::TextWrapped("%s", line.c_str());
+        }
+        ImGui::PopTextWrapPos();
+        ImGui::EndChild();
+        ImGui::End();
+        return;
+    }
+
+    const std::optional<size_t> active_index =
+        activeTimedLyricLineIndex(lyrics_document_, app_.positionSeconds());
+    if (active_index != last_active_timed_lyric_line_) {
+        lyrics_should_autoscroll_ = true;
+        last_active_timed_lyric_line_ = active_index;
+    }
+
+    ImGui::BeginChild("lyrics_timed_scroll", ImVec2(0.0f, 0.0f));
+    if (!active_index && lyrics_should_autoscroll_) {
+        ImGui::SetScrollY(0.0f);
+        lyrics_should_autoscroll_ = false;
+    }
+
+    for (size_t i = 0; i < lyrics_document_.timed_lines.size(); ++i) {
+        const TimedLyricLine& line = lyrics_document_.timed_lines[i];
+        const bool is_current = active_index && *active_index == i;
+
+        if (is_current) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.94f, 0.86f, 0.34f, 1.0f));
+            ImGui::TextWrapped("%s", line.text.empty() ? " " : line.text.c_str());
+            if (lyrics_should_autoscroll_) {
+                ImGui::SetScrollHereY(0.5f);
+                lyrics_should_autoscroll_ = false;
+            }
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            ImGui::TextWrapped("%s", line.text.empty() ? " " : line.text.c_str());
+            ImGui::PopStyleColor();
+        }
+    }
+
+    ImGui::EndChild();
     ImGui::End();
 }
 
@@ -2785,6 +2868,16 @@ void MainWindow::syncAlbumArtTexture(const std::shared_ptr<const TrackInfo>& inf
                       info->album_art_width * 4);
     album_art_tex_w_ = info->album_art_width;
     album_art_tex_h_ = info->album_art_height;
+}
+
+void MainWindow::syncLyricsDocument(const std::shared_ptr<const TrackInfo>& info) {
+    if (sameSharedOwner(info, lyrics_track_info_))
+        return;
+
+    lyrics_track_info_ = info;
+    lyrics_document_ = info ? parseLyrics(info->lyrics) : LyricsDocument{};
+    last_active_timed_lyric_line_.reset();
+    lyrics_should_autoscroll_ = true;
 }
 
 void MainWindow::beginRenamePlaylist(uint64_t playlist_id) {

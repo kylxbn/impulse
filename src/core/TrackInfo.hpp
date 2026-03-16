@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Lyrics.hpp"
 #include "MediaSource.hpp"
 
 #include <cstdint>
@@ -48,6 +49,9 @@ struct TrackInfo {
     std::string genre;
     std::string track_number;
     std::string comment;
+    std::string lyrics;
+    LyricsSourceKind lyrics_source_kind = LyricsSourceKind::None;
+    std::filesystem::path lyrics_source_path;
 
     // ReplayGain (from tags, never computed on the fly)
     std::optional<float> rg_track_gain_db;
