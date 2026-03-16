@@ -27,6 +27,39 @@ Application::~Application() {
     // jthread's destructor calls request_stop() + join()
 }
 
+void Application::onAudioOutputProgress(void* userdata) noexcept {
+    auto* self = static_cast<Application*>(userdata);
+    if (!self)
+        return;
+
+    self->signalDecodeLoop();
+}
+
+void Application::signalDecodeLoop() noexcept {
+    decode_wakeup_generation_.fetch_add(1, std::memory_order_release);
+    decode_wait_cv_.notify_one();
+}
+
+void Application::waitForDecodeLoopSignal(std::stop_token stop,
+                                          uint64_t observed_generation,
+                                          std::chrono::milliseconds max_wait) {
+    auto predicate = [this, observed_generation, stop]() {
+        return stop.stop_requested() ||
+               decode_wakeup_generation_.load(std::memory_order_acquire) != observed_generation;
+    };
+
+    if (predicate())
+        return;
+
+    std::unique_lock lock(decode_wait_mutex_);
+    if (max_wait == std::chrono::milliseconds::max()) {
+        decode_wait_cv_.wait(lock, stop, predicate);
+        return;
+    }
+
+    decode_wait_cv_.wait_for(lock, stop, max_wait, predicate);
+}
+
 // ---------------------------------------------------------------------------
 int Application::run() {
     // Start audio output
@@ -35,7 +68,9 @@ int Application::run() {
                             playback_state_.current_frame,
                             playback_state_.seek_generation,
                             playback_state_.current_bitrate_bps,
-                            playback_state_.volume)) {
+                            playback_state_.volume,
+                            &Application::onAudioOutputProgress,
+                            this)) {
         return 1;
     }
 
@@ -52,6 +87,7 @@ int Application::run() {
 
     if (decode_thread_.joinable()) {
         decode_thread_.request_stop();
+        signalDecodeLoop();
         decode_thread_.join();
     }
     audio_output_.shutdown();
@@ -92,7 +128,8 @@ void Application::decodeLoop(std::stop_token stop) {
         const uint32_t startup_channels = audio_output_.config().channels;
 
         if (!playing && !buffering) {
-            std::this_thread::sleep_for(5ms);
+            waitForDecodeLoopSignal(stop,
+                                    decode_wakeup_generation_.load(std::memory_order_acquire));
             continue;
         }
 
@@ -107,7 +144,6 @@ void Application::decodeLoop(std::stop_token stop) {
                 playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
                 playback_state_.status.store(PlaybackStatus::Error, std::memory_order_relaxed);
                 publishNowPlaying(nullptr);
-                std::this_thread::sleep_for(2ms);
                 continue;
             }
         } else if (live_stream &&
@@ -117,7 +153,6 @@ void Application::decodeLoop(std::stop_token stop) {
             live_stream_reconnect_attempts_ = 0;
             playback_state_.status.store(PlaybackStatus::Buffering, std::memory_order_relaxed);
             audio_output_.setPaused(true);
-            std::this_thread::sleep_for(2ms);
             continue;
         }
 
@@ -133,7 +168,6 @@ void Application::decodeLoop(std::stop_token stop) {
                 prepared_gapless_track_.has_value(),
                 !pending_pcm.empty())) {
             handleEndOfTrack();
-            std::this_thread::sleep_for(2ms);
             continue;
         }
 
@@ -142,7 +176,8 @@ void Application::decodeLoop(std::stop_token stop) {
         if (!buffering &&
             pending_pcm.empty() &&
             audio_ring_.available_read() / audio_output_.config().channels >= target_ahead_frames) {
-            std::this_thread::sleep_for(2ms);
+            waitForDecodeLoopSignal(stop,
+                                    decode_wakeup_generation_.load(std::memory_order_acquire));
             continue;
         }
 
@@ -150,7 +185,8 @@ void Application::decodeLoop(std::stop_token stop) {
             if (prepared_gapless_track_ ||
                 !decoder_.is_open() ||
                 playback_state_.decoder_reached_eof.load(std::memory_order_relaxed)) {
-                std::this_thread::sleep_for(2ms);
+                waitForDecodeLoopSignal(stop,
+                                        decode_wakeup_generation_.load(std::memory_order_acquire));
                 continue;
             }
 
@@ -163,7 +199,9 @@ void Application::decodeLoop(std::stop_token stop) {
                     pending_pcm.clear();
                     pending_samples = 0;
                     pending_bitrate_bps = 0;
-                    std::this_thread::sleep_for(kLiveStreamReconnectDelay);
+                    waitForDecodeLoopSignal(stop,
+                                            decode_wakeup_generation_.load(std::memory_order_acquire),
+                                            kLiveStreamReconnectDelay);
                     continue;
                 }
                 playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
@@ -191,25 +229,29 @@ void Application::decodeLoop(std::stop_token stop) {
                 break;
 
             if (!bitrate_ring_.canPush()) {
-                std::this_thread::sleep_for(1ms);
+                waitForDecodeLoopSignal(stop,
+                                        decode_wakeup_generation_.load(std::memory_order_acquire));
                 continue;
             }
 
             size_t n = audio_ring_.write(pending_pcm.data() + pending_samples,
                                          pending_pcm.size() - pending_samples);
             if (n == 0) {
-                std::this_thread::sleep_for(1ms);
+                waitForDecodeLoopSignal(stop,
+                                        decode_wakeup_generation_.load(std::memory_order_acquire));
                 continue;
             }
 
             const uint32_t frames_written = static_cast<uint32_t>(n / channels);
             if (frames_written == 0) {
-                std::this_thread::sleep_for(1ms);
+                waitForDecodeLoopSignal(stop,
+                                        decode_wakeup_generation_.load(std::memory_order_acquire));
                 continue;
             }
 
             if (!bitrate_ring_.push(frames_written, pending_bitrate_bps)) {
-                std::this_thread::sleep_for(1ms);
+                waitForDecodeLoopSignal(stop,
+                                        decode_wakeup_generation_.load(std::memory_order_acquire));
                 continue;
             }
 
@@ -249,6 +291,7 @@ void Application::enqueueCommand(const Command& cmd) {
             return;
         std::this_thread::sleep_for(kCommandRetryDelay);
     }
+    signalDecodeLoop();
 }
 
 void Application::discardBufferedAudio(int64_t target_frame) {
@@ -681,10 +724,12 @@ void Application::commandOpenFileGapless(std::filesystem::path path,
 void Application::notifyPlaylistChanged(uint64_t playlist_tab_id, uint64_t playlist_revision) {
     std::scoped_lock lock(playlist_revisions_mutex_);
     playlist_revisions_[playlist_tab_id] = playlist_revision;
+    signalDecodeLoop();
 }
 void Application::forgetPlaylist(uint64_t playlist_tab_id) {
     std::scoped_lock lock(playlist_revisions_mutex_);
     playlist_revisions_.erase(playlist_tab_id);
+    signalDecodeLoop();
 }
 void Application::commandPlay() {
     if (playback_state_.status.load(std::memory_order_relaxed) != PlaybackStatus::Paused)
@@ -702,12 +747,14 @@ void Application::commandPlay() {
             !(decoder_reached_eof && committed_frames > 0)) {
             playback_state_.status.store(PlaybackStatus::Buffering, std::memory_order_relaxed);
             audio_output_.setPaused(true);
+            signalDecodeLoop();
             return;
         }
         live_stream_reconnect_attempts_ = 0;
     }
     playback_state_.status.store(PlaybackStatus::Playing, std::memory_order_relaxed);
     audio_output_.setPaused(false);
+    signalDecodeLoop();
 }
 void Application::commandPause() {
     const auto status = playback_state_.status.load(std::memory_order_relaxed);
@@ -719,10 +766,12 @@ void Application::commandPause() {
     playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
     playback_state_.status.store(PlaybackStatus::Paused, std::memory_order_relaxed);
     audio_output_.setPaused(true);
+    signalDecodeLoop();
 }
 void Application::commandSetBufferAheadSeconds(float seconds) {
     target_buffer_ahead_frames_.store(clampBufferAheadFrames(seconds),
                                       std::memory_order_relaxed);
+    signalDecodeLoop();
 }
 void Application::commandStop()                   { enqueueCommand(CommandStop{}); }
 void Application::commandSeek(double s)           { enqueueCommand(CommandSeek{s}); }
