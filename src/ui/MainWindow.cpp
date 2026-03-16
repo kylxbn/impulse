@@ -398,7 +398,9 @@ void MainWindow::loadSession() {
                         continue;
 
                     std::optional<TrackInfo> metadata;
-                    if (auto result = MetadataReader::read(source); result.has_value())
+                    if (auto result = MetadataReader::read(
+                            source, MetadataReadOptions{.decode_album_art = false});
+                        result.has_value())
                         metadata = std::move(result.value());
 
                     playlist.playlist.addTrack(source, metadata ? &*metadata : nullptr);
@@ -2264,7 +2266,9 @@ void MainWindow::addTrackToPlaylist(const std::filesystem::path& path,
 
     PlaylistManager& playlist = activePlaylist();
     std::optional<TrackInfo> metadata;
-    if (auto result = MetadataReader::read(path); result.has_value())
+    if (auto result = MetadataReader::read(
+            path, MetadataReadOptions{.decode_album_art = false});
+        result.has_value())
         metadata = std::move(result.value());
 
     const size_t insert_index = insert_next && playlist.hasCurrentTrack()
