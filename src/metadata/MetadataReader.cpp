@@ -5,7 +5,6 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/dict.h>
-#include <libavutil/imgutils.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/samplefmt.h>
 #include <libswscale/swscale.h>
@@ -164,41 +163,32 @@ bool decodeFrameToAlbumArt(AVFrame* frame, TrackInfo& info) {
                              coeffs, 1,
                              0, 1 << 16, 1 << 16);
 
-    constexpr int kImageAlignment = 32;
-    const int rgba_buffer_size =
-        av_image_get_buffer_size(AV_PIX_FMT_RGBA, w, h, kImageAlignment);
-    if (rgba_buffer_size < 0) {
+    AVFrame* rgba_frame = av_frame_alloc();
+    if (!rgba_frame) {
         sws_freeContext(sws);
         return false;
     }
 
-    uint8_t* rgba_buffer = static_cast<uint8_t*>(av_malloc(static_cast<size_t>(rgba_buffer_size)));
-    if (!rgba_buffer) {
+    rgba_frame->format = AV_PIX_FMT_RGBA;
+    rgba_frame->width = w;
+    rgba_frame->height = h;
+
+    if (av_frame_get_buffer(rgba_frame, 0) < 0) {
+        av_frame_free(&rgba_frame);
         sws_freeContext(sws);
         return false;
     }
 
-    uint8_t* dst_data[4] = {};
-    int dst_linesize[4] = {};
-    if (av_image_fill_arrays(dst_data,
-                             dst_linesize,
-                             rgba_buffer,
-                             AV_PIX_FMT_RGBA,
-                             w,
-                             h,
-                             kImageAlignment) < 0) {
-        av_free(rgba_buffer);
+    if (av_frame_make_writable(rgba_frame) < 0) {
+        av_frame_free(&rgba_frame);
         sws_freeContext(sws);
         return false;
     }
 
-    const int scaled_rows = sws_scale(sws,
-                                      const_cast<const uint8_t* const*>(frame->data),
-                                      frame->linesize, 0, h,
-                                      dst_data, dst_linesize);
+    const int scaled_rows = sws_scale_frame(sws, rgba_frame, frame);
     sws_freeContext(sws);
-    if (scaled_rows != h) {
-        av_free(rgba_buffer);
+    if (scaled_rows < 0) {
+        av_frame_free(&rgba_frame);
         return false;
     }
 
@@ -206,10 +196,10 @@ bool decodeFrameToAlbumArt(AVFrame* frame, TrackInfo& info) {
     const size_t row_bytes = static_cast<size_t>(w) * 4;
     for (int y = 0; y < h; ++y) {
         std::memcpy(rgba.data() + static_cast<size_t>(y) * row_bytes,
-                    dst_data[0] + static_cast<size_t>(y) * dst_linesize[0],
+                    rgba_frame->data[0] + static_cast<size_t>(y) * rgba_frame->linesize[0],
                     row_bytes);
     }
-    av_free(rgba_buffer);
+    av_frame_free(&rgba_frame);
 
     info.album_art_rgba = std::move(rgba);
     info.album_art_width = w;
