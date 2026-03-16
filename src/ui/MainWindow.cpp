@@ -122,6 +122,12 @@ std::string playlistTabLabel(const PlaylistDocument& playlist, bool is_playing) 
                        playlist.id);
 }
 
+template <typename T, typename U>
+bool sameSharedOwner(const std::shared_ptr<T>& lhs,
+                     const std::shared_ptr<U>& rhs) {
+    return !lhs.owner_before(rhs) && !rhs.owner_before(lhs);
+}
+
 std::string playlistFileDialogName(std::string_view playlist_name) {
     std::string sanitized;
     sanitized.reserve(playlist_name.size());
@@ -700,7 +706,7 @@ MainWindow::RenderSnapshot MainWindow::captureRenderSnapshot() const {
     return RenderSnapshot{
         .playback_status = app_.playbackStatus(),
         .now_playing_item_id = frame_now_playing_ ? frame_now_playing_->playlist_item_id : 0,
-        .track_info = info.get(),
+        .track_info = info,
         .position_ticks = static_cast<int64_t>(position_seconds * 20.0),
         .duration_ticks = static_cast<int64_t>(duration_seconds * 20.0),
         .bitrate_kbps = instantaneous_bitrate_bps > 0 ? instantaneous_bitrate_bps / 1000 : 0,
@@ -708,6 +714,18 @@ MainWindow::RenderSnapshot MainWindow::captureRenderSnapshot() const {
         .ring_write_bucket = ring_write / 1024,
         .volume_centidb = static_cast<int>(std::lround(linearGainToDb(app_.volume()) * 100.0f)),
     };
+}
+
+bool MainWindow::RenderSnapshot::operator==(const RenderSnapshot& other) const {
+    return playback_status == other.playback_status &&
+           now_playing_item_id == other.now_playing_item_id &&
+           sameSharedOwner(track_info, other.track_info) &&
+           position_ticks == other.position_ticks &&
+           duration_ticks == other.duration_ticks &&
+           bitrate_kbps == other.bitrate_kbps &&
+           ring_read_bucket == other.ring_read_bucket &&
+           ring_write_bucket == other.ring_write_bucket &&
+           volume_centidb == other.volume_centidb;
 }
 
 void MainWindow::renderLayout() {
@@ -1375,8 +1393,8 @@ void MainWindow::renderTransportWindow() {
     const float current_kbps = instant_bitrate_bps > 0
         ? static_cast<float>(instant_bitrate_bps) / 1000.0f
         : 0.0f;
-    if (info.get() != bitrate_peak_track_) {
-        bitrate_peak_track_ = info.get();
+    if (!sameSharedOwner(info, bitrate_peak_track_)) {
+        bitrate_peak_track_ = info;
         bitrate_bar_peak_kbps_ = 0.0f;
     }
     if (!info)
@@ -1596,7 +1614,7 @@ void MainWindow::renderInspectorWindow() {
     auto info = frame_now_playing_ ? frame_now_playing_->track_info : nullptr;
 
     if (ImGui::CollapsingHeader("Overview", ImGuiTreeNodeFlags_DefaultOpen))
-        renderNowPlayingTab(info.get());
+        renderNowPlayingTab(info);
     if (ImGui::CollapsingHeader("Technical", ImGuiTreeNodeFlags_DefaultOpen))
         renderTechInfoPanel();
     if (ImGui::CollapsingHeader("Metadata", ImGuiTreeNodeFlags_DefaultOpen))
@@ -1613,7 +1631,7 @@ void MainWindow::renderAlbumArtWindow() {
     }
 
     auto info = frame_now_playing_ ? frame_now_playing_->track_info : nullptr;
-    syncAlbumArtTexture(info.get());
+    syncAlbumArtTexture(info);
 
     if (!info || !album_art_texture_) {
         ImGui::TextDisabled("No album art available for the current track.");
@@ -1854,7 +1872,7 @@ void MainWindow::renderAboutPopup() {
     ImGui::EndPopup();
 }
 
-void MainWindow::renderNowPlayingTab(const TrackInfo* info) {
+void MainWindow::renderNowPlayingTab(const std::shared_ptr<const TrackInfo>& info) {
     syncAlbumArtTexture(info);
 
     if (album_art_texture_) {
@@ -2711,9 +2729,10 @@ void MainWindow::syncAllPlaylistRevisions() {
         app_.notifyPlaylistChanged(playlist.id, playlist.revision);
 }
 
-void MainWindow::syncAlbumArtTexture(const TrackInfo* info) {
-    if (info == last_track_) return;
-    last_track_ = info;
+void MainWindow::syncAlbumArtTexture(const std::shared_ptr<const TrackInfo>& info) {
+    if (sameSharedOwner(info, last_track_info_))
+        return;
+    last_track_info_ = info;
 
     if (album_art_texture_) {
         SDL_DestroyTexture(album_art_texture_);

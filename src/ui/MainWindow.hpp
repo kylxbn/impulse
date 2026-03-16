@@ -93,7 +93,7 @@ private:
     void renderAddUrlPopup();
     void renderKeyboardShortcutsPopup();
     void renderAboutPopup();
-    void renderNowPlayingTab(const TrackInfo* info);
+    void renderNowPlayingTab(const std::shared_ptr<const TrackInfo>& info);
     void renderMetadataPanel();
     void renderTechInfoPanel();
     void handleKeyboardShortcuts();
@@ -179,7 +179,7 @@ private:
     [[nodiscard]] std::optional<size_t> manualAdvanceIndex(const PlaylistDocument& playlist,
                                                            bool forward) const;
 
-    void syncAlbumArtTexture(const TrackInfo* info);
+    void syncAlbumArtTexture(const std::shared_ptr<const TrackInfo>& info);
     void scheduleGaplessAdvanceTrack();
     void openNextTrack();
     void openPrevTrack();
@@ -188,7 +188,7 @@ private:
     struct RenderSnapshot {
         PlaybackStatus playback_status = PlaybackStatus::Stopped;
         uint64_t       now_playing_item_id = 0;
-        const TrackInfo* track_info = nullptr;
+        std::shared_ptr<const TrackInfo> track_info;
         int64_t        position_ticks = 0;
         int64_t        duration_ticks = 0;
         int64_t        bitrate_kbps = 0;
@@ -196,7 +196,7 @@ private:
         size_t         ring_write_bucket = 0;
         int            volume_centidb = 0;
 
-        bool operator==(const RenderSnapshot& other) const = default;
+        bool operator==(const RenderSnapshot& other) const;
     };
     RenderSnapshot captureRenderSnapshot() const;
 
@@ -212,7 +212,7 @@ private:
     SDL_Texture*      album_art_texture_ = nullptr;
     int               album_art_tex_w_   = 0;
     int               album_art_tex_h_   = 0;
-    const TrackInfo*  last_track_        = nullptr;  // raw ptr for change detection only
+    std::shared_ptr<const TrackInfo> last_track_info_;
 
     std::filesystem::path browser_selected_path_;
     std::vector<std::filesystem::path> pending_external_drop_paths_;
@@ -252,7 +252,7 @@ private:
     std::optional<float> seek_drag_progress_;
     std::string status_message_;
     float bitrate_bar_peak_kbps_ = 0.0f;
-    const TrackInfo* bitrate_peak_track_ = nullptr;
+    std::shared_ptr<const TrackInfo> bitrate_peak_track_;
     bool pending_end_of_track_advance_ = false;
     bool pending_error_advance_ = false;
     std::optional<int64_t> pending_mpris_seek_target_us_;
