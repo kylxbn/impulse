@@ -19,6 +19,7 @@ struct CommandOpenFileGapless {
     uint64_t              playlist_tab_id = 0;
     uint64_t              playlist_item_id = 0;
     uint64_t              playlist_revision = 0;
+    uint64_t              policy_generation = 0;
 };
 struct CommandPlay      {};
 struct CommandPause     {};

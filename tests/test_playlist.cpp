@@ -3,6 +3,7 @@
 
 #include "playlist/PlaylistManager.hpp"
 #include "playlist/PlaylistWorkspace.hpp"
+#include "ui/PlaybackNavigationUtils.hpp"
 
 TEST_CASE("PlaylistManager preserves current track when moving selected rows") {
     PlaylistManager playlist;
@@ -126,6 +127,51 @@ TEST_CASE("PlaylistManager retains track and album ReplayGain metadata") {
     CHECK(*playlist.tracks()[0].album_replay_gain_db == doctest::Approx(-13.10f));
     CHECK(*playlist.tracks()[0].track_replay_gain_peak == doctest::Approx(1.0f));
     CHECK(*playlist.tracks()[0].album_replay_gain_peak == doctest::Approx(0.98f));
+}
+
+TEST_CASE("Playback advance follows the audible playlist item before cursor sync") {
+    PlaylistManager playlist;
+    playlist.addTrack("/music/a.flac");
+    playlist.addTrack("/music/b.flac");
+    playlist.addTrack("/music/c.flac");
+
+    CHECK_FALSE(playlist.setCurrentIndex(0));
+    const uint64_t audible_item_id = playlist.tracks()[1].id;
+
+    const auto next_index =
+        playbackAdvanceIndex(playlist, audible_item_id, RepeatMode::Off);
+
+    REQUIRE(next_index.has_value());
+    CHECK(*next_index == 2);
+    CHECK(playlist.tracks()[*next_index].file_name == "c.flac");
+}
+
+TEST_CASE("Playback advance falls back to the playlist cursor when no audible item is known") {
+    PlaylistManager playlist;
+    playlist.addTrack("/music/a.flac");
+    playlist.addTrack("/music/b.flac");
+
+    CHECK_FALSE(playlist.setCurrentIndex(0));
+
+    const auto next_index = playbackAdvanceIndex(playlist, 0, RepeatMode::Off);
+
+    REQUIRE(next_index.has_value());
+    CHECK(*next_index == 1);
+    CHECK(playlist.tracks()[*next_index].file_name == "b.flac");
+}
+
+TEST_CASE("Playback advance still marks end-of-track handled at the end of the playlist") {
+    PlaylistManager playlist;
+    playlist.addTrack("/music/a.flac");
+    playlist.addTrack("/music/b.flac");
+
+    REQUIRE(playlist.setCurrentIndex(1));
+
+    const PlaybackAdvanceDecision advance =
+        playbackAdvanceDecision(playlist, playlist.tracks()[1].id, RepeatMode::Off);
+
+    CHECK(advance.handled_current_track);
+    CHECK_FALSE(advance.next_index.has_value());
 }
 
 TEST_CASE("PlaylistWorkspace keeps at least one playlist and switches the active tab") {

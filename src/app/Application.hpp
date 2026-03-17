@@ -43,6 +43,7 @@ public:
                                 uint64_t playlist_tab_id = 0,
                                 uint64_t playlist_item_id = 0,
                                 uint64_t playlist_revision = 0);
+    void invalidatePendingGaplessRequests();
     void notifyPlaylistChanged(uint64_t playlist_tab_id, uint64_t playlist_revision);
     void forgetPlaylist(uint64_t playlist_tab_id);
     void commandPlay();
@@ -100,6 +101,7 @@ private:
     void clearGaplessTrackSwitches();
     void publishNowPlaying(std::shared_ptr<NowPlayingTrack> now_playing);
     uint64_t currentPlaylistRevision(uint64_t playlist_tab_id) const;
+    uint64_t currentGaplessPolicyGeneration() const;
     uint32_t clampBufferAheadFrames(float seconds) const;
     uint32_t bufferedFrames() const;
     uint32_t gaplessCommitLeadFrames() const;
@@ -136,6 +138,7 @@ private:
     GaplessPendingRequestState             pending_gapless_request_;
     std::optional<PreparedGaplessTrack>    prepared_gapless_track_;
     GaplessTrackQueue                      gapless_track_switches_;
+    std::atomic<uint64_t>                  gapless_policy_generation_{1};
     std::atomic<uint32_t>                  target_buffer_ahead_frames_{16u * 48000u};
     mutable std::mutex                     playlist_revisions_mutex_;
     std::unordered_map<uint64_t, uint64_t> playlist_revisions_;
