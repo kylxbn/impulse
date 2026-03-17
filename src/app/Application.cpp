@@ -370,8 +370,15 @@ bool Application::processCommand(const Command& cmd) {
 
         } else if constexpr (std::is_same_v<T, CommandOpenFileGapless>) {
             pending_gapless_request_.schedule(
-                GaplessPendingRequest{c.source, c.playlist_tab_id, c.playlist_item_id, c.playlist_revision},
-                currentPlaylistRevision(c.playlist_tab_id));
+                GaplessPendingRequest{
+                    c.source,
+                    c.playlist_tab_id,
+                    c.playlist_item_id,
+                    c.playlist_revision,
+                    c.policy_generation,
+                },
+                currentPlaylistRevision(c.playlist_tab_id),
+                currentGaplessPolicyGeneration());
             return false;
 
         } else if constexpr (std::is_same_v<T, CommandPlay>) {
@@ -499,29 +506,23 @@ void Application::handleEndOfTrack() {
 }
 
 void Application::maybePreparePendingGaplessTrack() {
-    const GaplessPendingRequest* scheduled_request = pending_gapless_request_.peek();
+    const GaplessPendingRequest* scheduled_request = nullptr;
+    if (const GaplessPendingRequest* pending_request = pending_gapless_request_.peek()) {
+        scheduled_request = pending_gapless_request_.current(
+            currentPlaylistRevision(pending_request->playlist_tab_id),
+            currentGaplessPolicyGeneration());
+    }
     if (!scheduled_request) {
         clearPreparedGaplessTrack();
         return;
     }
-
-    const uint64_t playlist_revision = currentPlaylistRevision(scheduled_request->playlist_tab_id);
-    if (scheduled_request->playlist_revision != playlist_revision) {
-        pending_gapless_request_.clear();
-        clearPreparedGaplessTrack();
-        return;
-    }
-
-    const GaplessPendingRequest* pending_request = pending_gapless_request_.peek();
-    if (!pending_request) {
-        clearPreparedGaplessTrack();
-        return;
-    }
+    const GaplessPendingRequest* pending_request = scheduled_request;
 
     const bool prepared_matches_pending = prepared_gapless_track_ &&
         prepared_gapless_track_->request.playlist_tab_id == pending_request->playlist_tab_id &&
         prepared_gapless_track_->request.playlist_item_id == pending_request->playlist_item_id &&
         prepared_gapless_track_->request.playlist_revision == pending_request->playlist_revision &&
+        prepared_gapless_track_->request.policy_generation == pending_request->policy_generation &&
         prepared_gapless_track_->request.source == pending_request->source;
 
     if (!prepared_matches_pending)
@@ -586,6 +587,11 @@ bool Application::maybeCommitPreparedGaplessTrack(std::vector<float>& pending_pc
         return false;
     if (!prepared_gapless_track_)
         return false;
+    if (prepared_gapless_track_->request.policy_generation != currentGaplessPolicyGeneration()) {
+        pending_gapless_request_.clear();
+        clearPreparedGaplessTrack();
+        return false;
+    }
     if (!pending_pcm.empty())
         return false;
     if (prepared_gapless_track_->staged_pcm.empty() &&
@@ -597,6 +603,10 @@ bool Application::maybeCommitPreparedGaplessTrack(std::vector<float>& pending_pc
     if (buffered_frames > gaplessCommitLeadFrames())
         return false;
 
+    // This is the gapless point of no return: once we move the prepared PCM
+    // into the write path and queue the public switch, later UI policy changes
+    // (repeat mode, etc.) cannot reliably cancel the transition without
+    // risking an audible gap.
     auto prepared = std::move(*prepared_gapless_track_);
     prepared_gapless_track_.reset();
     pending_gapless_request_.clear();
@@ -710,6 +720,7 @@ void Application::commandOpenFileGapless(MediaSource source,
         playlist_tab_id,
         playlist_item_id,
         playlist_revision,
+        currentGaplessPolicyGeneration(),
     });
 }
 void Application::commandOpenFileGapless(std::filesystem::path path,
@@ -720,6 +731,10 @@ void Application::commandOpenFileGapless(std::filesystem::path path,
                            playlist_tab_id,
                            playlist_item_id,
                            playlist_revision);
+}
+void Application::invalidatePendingGaplessRequests() {
+    gapless_policy_generation_.fetch_add(1, std::memory_order_acq_rel);
+    signalDecodeLoop();
 }
 void Application::notifyPlaylistChanged(uint64_t playlist_tab_id, uint64_t playlist_revision) {
     std::scoped_lock lock(playlist_revisions_mutex_);
@@ -788,6 +803,10 @@ uint64_t Application::currentPlaylistRevision(uint64_t playlist_tab_id) const {
     if (auto it = playlist_revisions_.find(playlist_tab_id); it != playlist_revisions_.end())
         return it->second;
     return 0;
+}
+
+uint64_t Application::currentGaplessPolicyGeneration() const {
+    return gapless_policy_generation_.load(std::memory_order_acquire);
 }
 
 PlaybackStatus Application::playbackStatus() const {

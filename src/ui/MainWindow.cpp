@@ -5,6 +5,7 @@
 #include "core/Lyrics.hpp"
 #include "metadata/MetadataReader.hpp"
 #include "playlist/M3U8Playlist.hpp"
+#include "ui/PlaybackNavigationUtils.hpp"
 
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
@@ -2683,6 +2684,8 @@ void MainWindow::applyRepeatMode(RepeatMode mode) {
     if (settings_.repeat_mode == mode)
         return;
 
+    clearPendingEndOfTrackAdvance();
+    app_.invalidatePendingGaplessRequests();
     settings_.repeat_mode = mode;
     if (!SettingsStorage::save(settings_path_, settings_))
         status_message_ = "Repeat mode changed for this session, but settings could not be saved.";
@@ -3173,21 +3176,14 @@ const PlaylistDocument* MainWindow::playlistDocument(uint64_t playlist_id) const
 }
 
 std::optional<size_t> MainWindow::playbackAdvanceIndex(const PlaylistDocument& playlist) const {
-    if (!playlist.playlist.hasCurrentTrack())
-        return std::nullopt;
+    const uint64_t audible_playlist_item_id =
+        frame_now_playing_ && frame_now_playing_->playlist_tab_id == playlist.id
+        ? frame_now_playing_->playlist_item_id
+        : 0;
 
-    const size_t current_index = playlist.playlist.currentIndex();
-    if (settings_.repeat_mode == RepeatMode::Track)
-        return current_index;
-
-    const size_t next_index = current_index + 1;
-    if (next_index < playlist.playlist.size())
-        return next_index;
-
-    if (settings_.repeat_mode == RepeatMode::Playlist && !playlist.playlist.empty())
-        return size_t{0};
-
-    return std::nullopt;
+    return ::playbackAdvanceIndex(playlist.playlist,
+                                  audible_playlist_item_id,
+                                  settings_.repeat_mode);
 }
 
 std::optional<size_t> MainWindow::manualAdvanceIndex(const PlaylistDocument& playlist, bool forward) const {
@@ -3216,13 +3212,23 @@ void MainWindow::scheduleGaplessAdvanceTrack() {
     if (!playlist || !playlist->playlist.hasCurrentTrack())
         return;
 
-    const auto next_index = playbackAdvanceIndex(*playlist);
-    if (!next_index)
+    const uint64_t audible_playlist_item_id =
+        frame_now_playing_ && frame_now_playing_->playlist_tab_id == playlist->id
+        ? frame_now_playing_->playlist_item_id
+        : 0;
+    const PlaybackAdvanceDecision advance =
+        playbackAdvanceDecision(playlist->playlist,
+                                audible_playlist_item_id,
+                                settings_.repeat_mode);
+    if (!advance.handled_current_track)
         return;
 
-    const PlaylistItem& next = playlist->playlist.tracks()[*next_index];
     pending_end_of_track_advance_ = true;
     pending_end_of_track_track_ = playbackTrackInstance(frame_now_playing_);
+    if (!advance.next_index)
+        return;
+
+    const PlaylistItem& next = playlist->playlist.tracks()[*advance.next_index];
     const bool can_gapless = frame_now_playing_ &&
         frame_now_playing_->track_info &&
         !frame_now_playing_->track_info->is_stream &&
