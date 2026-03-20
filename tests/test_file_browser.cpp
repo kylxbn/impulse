@@ -87,8 +87,12 @@ TEST_CASE("FileBrowser recursive collection skips unreadable directories") {
     std::filesystem::remove_all(base);
 }
 
-TEST_CASE("FileBrowser recognises VGM and VGZ files as audio") {
+TEST_CASE("FileBrowser recognises VGM, VGZ, and tracker modules as audio") {
     CHECK(FileBrowser::isAudioFile("track.vgm"));
     CHECK(FileBrowser::isAudioFile("track.vgz"));
+    CHECK(FileBrowser::isAudioFile("track.mod"));
+    CHECK(FileBrowser::isAudioFile("track.xm"));
+    CHECK(FileBrowser::isAudioFile("track.it"));
+    CHECK(FileBrowser::isAudioFile("track.s3m"));
     CHECK_FALSE(FileBrowser::isAudioFile("track.txt"));
 }

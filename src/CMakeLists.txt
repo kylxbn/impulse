@@ -8,10 +8,12 @@ add_executable(impulse
     audio/Decoder.cpp
     audio/DecoderProvider.cpp
     audio/FFmpegDecoderBackend.cpp
+    audio/OpenMptDecoderBackend.cpp
     audio/VgmDecoderBackend.cpp
     audio/AudioOutput.cpp
     metadata/MetadataReader.cpp
     metadata/FFmpegMetadataReader.cpp
+    metadata/OpenMptMetadataReader.cpp
     metadata/VgmMetadataReader.cpp
     playlist/PlaylistManager.cpp
     playlist/PlaylistWorkspace.cpp
@@ -28,6 +30,7 @@ target_compile_definitions(impulse PRIVATE IMPULSE_APP_VERSION="${PROJECT_VERSIO
 
 target_link_libraries(impulse PRIVATE
     PkgConfig::LIBAV
+    PkgConfig::LIBOPENMPT
     PkgConfig::PIPEWIRE
     PkgConfig::SDL3
     PkgConfig::SYSTEMD
