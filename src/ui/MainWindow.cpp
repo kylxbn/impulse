@@ -1,9 +1,11 @@
 #include "MainWindow.hpp"
 
+#include "audio/Decoder.hpp"
 #include "app/SettingsStorage.hpp"
 #include "app/SessionStorage.hpp"
 #include "core/Lyrics.hpp"
 #include "metadata/MetadataReader.hpp"
+#include "core/SupportedFormats.hpp"
 #include "playlist/M3U8Playlist.hpp"
 #include "ui/PlaybackNavigationUtils.hpp"
 
@@ -540,7 +542,8 @@ bool MainWindow::runFrame() {
                 const bool can_gapless = frame_now_playing_ &&
                     frame_now_playing_->track_info &&
                     !frame_now_playing_->track_info->is_stream &&
-                    next.source.isFile();
+                    Decoder::supportsGaplessForSource(frame_now_playing_->track_info->source) &&
+                    Decoder::supportsGaplessForSource(next.source);
                 if (!can_gapless)
                     openTrackAt(playlist->id, *next_index);
             }
@@ -2099,6 +2102,7 @@ void MainWindow::renderTechInfoPanel() {
             ImGui::TextWrapped("%s", val.c_str());
         };
 
+        row("Decoder", info->decoder_name.empty() ? "--" : info->decoder_name);
         row("Codec", info->codec_name.empty() ? "--" : info->codec_name);
         row("Container", info->container_format.empty() ? "--" : info->container_format);
         row("Bitrate",
@@ -2128,7 +2132,7 @@ void MainWindow::renderTechInfoPanel() {
         row("Seek preroll",
             std::format("{} sample(s)", info->seek_preroll_samples));
         row("Trim mode", info->manual_skip_export_enabled
-            ? "FFmpeg manual frame skip metadata"
+            ? "Manual frame skip metadata"
             : "Codec padding fallback / none");
         ImGui::EndTable();
     }
@@ -2177,10 +2181,13 @@ void MainWindow::renderTechInfoPanel() {
     ImGui::TextDisabled(info->source.isUrl() ? "Source URL" : "File");
     ImGui::TextWrapped("%s", info->source.string().c_str());
 
-    if (!info->ffmpeg_analysis.empty()) {
+    if (!info->decoder_analysis.empty()) {
         ImGui::Spacing();
-        ImGui::TextDisabled("FFmpeg Analysis");
-        renderTrackInfoFieldTable("tech_ffmpeg_analysis", info->ffmpeg_analysis, 156.0f);
+        const std::string analysis_label = info->decoder_name.empty()
+            ? "Decoder Analysis"
+            : std::format("{} Analysis", info->decoder_name);
+        ImGui::TextDisabled("%s", analysis_label.c_str());
+        renderTrackInfoFieldTable("tech_decoder_analysis", info->decoder_analysis, 156.0f);
     }
 }
 
@@ -3232,7 +3239,8 @@ void MainWindow::scheduleGaplessAdvanceTrack() {
     const bool can_gapless = frame_now_playing_ &&
         frame_now_playing_->track_info &&
         !frame_now_playing_->track_info->is_stream &&
-        next.source.isFile();
+        Decoder::supportsGaplessForSource(frame_now_playing_->track_info->source) &&
+        Decoder::supportsGaplessForSource(next.source);
     if (can_gapless)
         app_.commandOpenFileGapless(next.source, playlist->id, next.id, playlist->revision);
 }

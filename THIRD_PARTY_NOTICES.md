@@ -8,6 +8,8 @@ This project includes source code from the following third-party components:
   Copyright (c) 2014-2026 Omar Cornut
 - readerwriterqueue: Simplified BSD License
   Copyright (c) 2013-2021 Cameron Desrochers
+- libvgm: zlib License
+  Copyright (c) ValleyBell and contributors
 - doctest: MIT License
   Copyright (c) 2016-2023 Viktor Kirilov
 

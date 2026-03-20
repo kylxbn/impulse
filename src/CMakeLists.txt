@@ -6,12 +6,18 @@ add_executable(impulse
     app/SettingsStorage.cpp
     app/SessionStorage.cpp
     audio/Decoder.cpp
+    audio/DecoderProvider.cpp
+    audio/FFmpegDecoderBackend.cpp
+    audio/VgmDecoderBackend.cpp
     audio/AudioOutput.cpp
     metadata/MetadataReader.cpp
+    metadata/FFmpegMetadataReader.cpp
+    metadata/VgmMetadataReader.cpp
     playlist/PlaylistManager.cpp
     playlist/PlaylistWorkspace.cpp
     playlist/M3U8Playlist.cpp
     browser/FileBrowser.cpp
+    core/SupportedFormats.cpp
     mpris/MprisModel.cpp
     mpris/MprisService.cpp
     ui/MainWindow.cpp
@@ -25,6 +31,9 @@ target_link_libraries(impulse PRIVATE
     PkgConfig::PIPEWIRE
     PkgConfig::SDL3
     PkgConfig::SYSTEMD
+    vgm-player
+    vgm-emu
+    vgm-utils
     imgui_sdl3
     readerwriterqueue
     pthread

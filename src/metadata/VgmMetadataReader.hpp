@@ -8,10 +8,8 @@
 #include <filesystem>
 #include <string>
 
-class MetadataReader {
+class VgmMetadataReader {
 public:
-    // Synchronous: opens the file, extracts all metadata, closes it.
-    // Call from the decode thread before starting playback.
     static std::expected<TrackInfo, std::string>
     read(const MediaSource& source,
          MetadataReadOptions options = {});

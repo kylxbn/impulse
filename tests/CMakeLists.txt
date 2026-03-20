@@ -13,6 +13,22 @@ if(NOT doctest_POPULATED)
     FetchContent_Populate(doctest)
 endif()
 
+set(IMPULSE_SHARED_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/Lyrics.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/SupportedFormats.cpp)
+
+set(IMPULSE_METADATA_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/metadata/MetadataReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/metadata/FFmpegMetadataReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/metadata/VgmMetadataReader.cpp)
+
+set(IMPULSE_DECODER_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/audio/Decoder.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/DecoderProvider.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/FFmpegDecoderBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/VgmDecoderBackend.cpp)
+
 function(add_impulse_test name sources)
     add_executable(${name} ${sources} ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp)
     target_include_directories(${name} PRIVATE
@@ -56,7 +72,9 @@ add_test(NAME test_playlist_io COMMAND test_playlist_io)
 
 add_executable(test_file_browser
     test_file_browser.cpp
-    ${CMAKE_SOURCE_DIR}/src/browser/FileBrowser.cpp)
+    ${CMAKE_SOURCE_DIR}/src/browser/FileBrowser.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/SupportedFormats.cpp)
 target_include_directories(test_file_browser PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
@@ -67,13 +85,13 @@ add_test(NAME test_file_browser COMMAND test_file_browser)
 # test_metadata needs MetadataReader compiled in
 add_executable(test_metadata
     test_metadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/Lyrics.cpp
-    ${CMAKE_SOURCE_DIR}/src/metadata/MetadataReader.cpp)
+    ${IMPULSE_SHARED_SOURCES}
+    ${IMPULSE_METADATA_SOURCES}
+    ${IMPULSE_DECODER_SOURCES})
 target_include_directories(test_metadata PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
-target_link_libraries(test_metadata PRIVATE PkgConfig::LIBAV)
+target_link_libraries(test_metadata PRIVATE PkgConfig::LIBAV vgm-player vgm-emu vgm-utils)
 target_compile_features(test_metadata PRIVATE cxx_std_23)
 add_test(NAME test_metadata COMMAND test_metadata)
 
@@ -90,14 +108,13 @@ add_test(NAME test_lyrics COMMAND test_lyrics)
 
 add_executable(test_decoder
     test_decoder.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/Lyrics.cpp
-    ${CMAKE_SOURCE_DIR}/src/audio/Decoder.cpp
-    ${CMAKE_SOURCE_DIR}/src/metadata/MetadataReader.cpp)
+    ${IMPULSE_SHARED_SOURCES}
+    ${IMPULSE_METADATA_SOURCES}
+    ${IMPULSE_DECODER_SOURCES})
 target_include_directories(test_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
-target_link_libraries(test_decoder PRIVATE PkgConfig::LIBAV)
+target_link_libraries(test_decoder PRIVATE PkgConfig::LIBAV vgm-player vgm-emu vgm-utils)
 target_compile_features(test_decoder PRIVATE cxx_std_23)
 add_test(NAME test_decoder COMMAND test_decoder)
 
@@ -126,6 +143,7 @@ add_executable(test_mpris_model
     test_mpris_model.cpp
     ${CMAKE_SOURCE_DIR}/src/browser/FileBrowser.cpp
     ${CMAKE_SOURCE_DIR}/src/core/MediaSource.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/SupportedFormats.cpp
     ${CMAKE_SOURCE_DIR}/src/mpris/MprisModel.cpp)
 target_include_directories(test_mpris_model PRIVATE
     ${CMAKE_SOURCE_DIR}/src

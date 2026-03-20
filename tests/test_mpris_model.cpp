@@ -69,9 +69,14 @@ TEST_CASE("File URIs round-trip and supported files are validated") {
     const auto temp_dir = std::filesystem::temp_directory_path() / "impulse-mpris-test";
     std::filesystem::create_directories(temp_dir);
     const auto temp_file = temp_dir / "track with spaces.mp3";
+    const auto vgm_file = temp_dir / "track.vgm";
 
     {
         std::ofstream stream(temp_file);
+        stream << "test";
+    }
+    {
+        std::ofstream stream(vgm_file);
         stream << "test";
     }
 
@@ -82,10 +87,12 @@ TEST_CASE("File URIs round-trip and supported files are validated") {
     REQUIRE(decoded.has_value());
     CHECK(*decoded == temp_file);
     CHECK(isSupportedOpenUri(temp_file));
+    CHECK(isSupportedOpenUri(vgm_file));
     const auto remote = mediaSourceFromOpenUri("https://example.com/track.mp3");
     REQUIRE(remote.has_value());
     CHECK(remote->isUrl());
 
     std::filesystem::remove(temp_file);
+    std::filesystem::remove(vgm_file);
     std::filesystem::remove(temp_dir);
 }

@@ -18,6 +18,15 @@ namespace {
 const std::filesystem::path kTempRoot =
     std::filesystem::temp_directory_path() / "impulse_test_metadata_reader";
 
+constexpr std::string_view kMinimalVgmHex =
+    "56676d2040000000500100000000000000000000000000001000000000000000"
+    "00000000000000000000000000000000000000000c0000000000000000000000"
+    "61100066";
+
+constexpr std::string_view kMinimalVgzHex =
+    "1f8b08000000000002ff0b4bcf55706060600860644001020cb8010f123b518021"
+    "0d008210a12844000000";
+
 std::vector<uint8_t> decodeBase64(std::string_view input) {
     auto decodeChar = [](char ch) -> int {
         if (ch >= 'A' && ch <= 'Z') return ch - 'A';
@@ -46,6 +55,23 @@ std::vector<uint8_t> decodeBase64(std::string_view input) {
         }
     }
 
+    return output;
+}
+
+std::vector<uint8_t> decodeHex(std::string_view input) {
+    auto decodeNibble = [](char ch) -> uint8_t {
+        if (ch >= '0' && ch <= '9') return static_cast<uint8_t>(ch - '0');
+        if (ch >= 'a' && ch <= 'f') return static_cast<uint8_t>(10 + ch - 'a');
+        if (ch >= 'A' && ch <= 'F') return static_cast<uint8_t>(10 + ch - 'A');
+        return 0;
+    };
+
+    std::vector<uint8_t> output;
+    output.reserve(input.size() / 2);
+    for (size_t i = 0; i + 1 < input.size(); i += 2) {
+        output.push_back(static_cast<uint8_t>(
+            (decodeNibble(input[i]) << 4) | decodeNibble(input[i + 1])));
+    }
     return output;
 }
 
@@ -110,6 +136,85 @@ std::filesystem::path createTestWaveFile(const std::filesystem::path& directory,
     return path;
 }
 
+std::filesystem::path createMinimalVgmFile(const std::filesystem::path& directory,
+                                           std::string_view filename) {
+    const auto path = directory / std::string(filename);
+    writeBinaryFile(path, decodeHex(kMinimalVgmHex));
+    return path;
+}
+
+std::filesystem::path createMinimalVgzFile(const std::filesystem::path& directory,
+                                           std::string_view filename) {
+    const auto path = directory / std::string(filename);
+    writeBinaryFile(path, decodeHex(kMinimalVgzHex));
+    return path;
+}
+
+void appendUtf16Le(std::vector<uint8_t>& bytes, std::string_view text) {
+    for (const unsigned char ch : text)
+        appendLe16(bytes, ch);
+    appendLe16(bytes, 0);
+}
+
+std::filesystem::path createTaggedVgmFile(const std::filesystem::path& directory,
+                                          std::string_view filename) {
+    constexpr uint32_t kHeaderSize = 0x40;
+    constexpr uint32_t kSn76489Clock = 3579545;
+    constexpr uint32_t kTrackFrames = 4096;
+
+    std::vector<uint8_t> bytes(kHeaderSize, 0);
+    bytes[0] = 'V';
+    bytes[1] = 'g';
+    bytes[2] = 'm';
+    bytes[3] = ' ';
+
+    auto writeLe32At = [&](size_t offset, uint32_t value) {
+        bytes[offset + 0] = static_cast<uint8_t>(value & 0xFFu);
+        bytes[offset + 1] = static_cast<uint8_t>((value >> 8) & 0xFFu);
+        bytes[offset + 2] = static_cast<uint8_t>((value >> 16) & 0xFFu);
+        bytes[offset + 3] = static_cast<uint8_t>((value >> 24) & 0xFFu);
+    };
+
+    writeLe32At(0x08, 0x00000150u);
+    writeLe32At(0x0C, kSn76489Clock);
+    writeLe32At(0x18, kTrackFrames);
+    writeLe32At(0x34, 0x0000000Cu);
+
+    const std::vector<uint8_t> commands = {
+        0x50, 0x90,
+        0x61, 0x00, 0x10,
+        0x66,
+    };
+    bytes.insert(bytes.end(), commands.begin(), commands.end());
+
+    const uint32_t gd3_offset = static_cast<uint32_t>(bytes.size());
+    bytes.insert(bytes.end(), {'G', 'd', '3', ' '});
+    appendLe32(bytes, 0x00000100u);
+
+    std::vector<uint8_t> gd3_payload;
+    appendUtf16Le(gd3_payload, "Green Hill Zone");
+    appendUtf16Le(gd3_payload, "");
+    appendUtf16Le(gd3_payload, "Sonic the Hedgehog");
+    appendUtf16Le(gd3_payload, "Sonic the Hedgehog");
+    appendUtf16Le(gd3_payload, "Mega Drive");
+    appendUtf16Le(gd3_payload, "Mega Drive");
+    appendUtf16Le(gd3_payload, "Masato Nakamura");
+    appendUtf16Le(gd3_payload, "");
+    appendUtf16Le(gd3_payload, "1991");
+    appendUtf16Le(gd3_payload, "Test Encoder");
+    appendUtf16Le(gd3_payload, "Opening theme");
+
+    appendLe32(bytes, static_cast<uint32_t>(gd3_payload.size()));
+    bytes.insert(bytes.end(), gd3_payload.begin(), gd3_payload.end());
+
+    writeLe32At(0x04, static_cast<uint32_t>(bytes.size() - 4));
+    writeLe32At(0x14, gd3_offset - 0x14u);
+
+    const auto path = directory / std::string(filename);
+    writeBinaryFile(path, bytes);
+    return path;
+}
+
 std::filesystem::path prepareTempRoot(std::string_view suite_name) {
     std::error_code cleanup_ec;
     std::filesystem::remove_all(kTempRoot, cleanup_ec);
@@ -119,9 +224,18 @@ std::filesystem::path prepareTempRoot(std::string_view suite_name) {
     return path;
 }
 
-std::optional<std::string> ffmpegAnalysisValue(const TrackInfo& info,
+std::optional<std::string> decoderAnalysisValue(const TrackInfo& info,
+                                                std::string_view label) {
+    for (const auto& field : info.decoder_analysis) {
+        if (field.label == label)
+            return field.value;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> formatMetadataValue(const TrackInfo& info,
                                                std::string_view label) {
-    for (const auto& field : info.ffmpeg_analysis) {
+    for (const auto& field : info.format_metadata) {
         if (field.label == label)
             return field.value;
     }
@@ -147,7 +261,8 @@ TEST_CASE("MetadataReader - read returns expected fields") {
     CHECK(info.sample_rate > 0);
     CHECK(info.channels > 0);
     CHECK(info.bit_depth >= 0);
-    CHECK(!info.ffmpeg_analysis.empty());
+    CHECK(!info.decoder_name.empty());
+    CHECK(!info.decoder_analysis.empty());
     CHECK(info.initial_padding_samples >= 0);
     CHECK(info.trailing_padding_samples >= 0);
     CHECK(info.seek_preroll_samples >= 0);
@@ -207,8 +322,8 @@ TEST_CASE("MetadataReader - falls back to album art files in the track directory
     CHECK(info.album_art_height == 1);
     CHECK(info.album_art_rgba.size() == 4);
     CHECK(info.external_album_art_path == external_art);
-    CHECK(ffmpegAnalysisValue(info, "Album art attached") == std::optional<std::string>{"no"});
-    CHECK(ffmpegAnalysisValue(info, "Album art external file") ==
+    CHECK(decoderAnalysisValue(info, "Album art attached") == std::optional<std::string>{"no"});
+    CHECK(decoderAnalysisValue(info, "Album art external file") ==
           std::optional<std::string>{external_art.filename().string()});
 }
 
@@ -230,8 +345,8 @@ TEST_CASE("MetadataReader - can skip album art during bulk metadata scans") {
     CHECK(info.album_art_height == 0);
     CHECK(info.album_art_rgba.empty());
     CHECK(info.external_album_art_path.empty());
-    CHECK(!ffmpegAnalysisValue(info, "Album art attached").has_value());
-    CHECK(!ffmpegAnalysisValue(info, "Album art external file").has_value());
+    CHECK(!decoderAnalysisValue(info, "Album art attached").has_value());
+    CHECK(!decoderAnalysisValue(info, "Album art external file").has_value());
 }
 
 TEST_CASE("MetadataReader - falls back to sidecar lyrics files in the track directory") {
@@ -253,7 +368,7 @@ TEST_CASE("MetadataReader - falls back to sidecar lyrics files in the track dire
     CHECK(info.lyrics == "[00:01.00]Hello\n[00:03.00]world");
     CHECK(info.lyrics_source_kind == LyricsSourceKind::SidecarFile);
     CHECK(info.lyrics_source_path == sidecar_lyrics);
-    CHECK(ffmpegAnalysisValue(info, "Lyrics source") ==
+    CHECK(decoderAnalysisValue(info, "Lyrics source") ==
           std::optional<std::string>{std::format("sidecar file ({})", sidecar_lyrics.filename().string())});
 }
 
@@ -280,4 +395,61 @@ TEST_CASE("MetadataReader - consecutive reads reuse the same external album art 
     CHECK(second_result->album_art_height == 1);
     CHECK(second_result->external_album_art_path == external_art);
     CHECK(second_result->album_art_rgba.size() == 4);
+}
+
+TEST_CASE("MetadataReader - reads VGM and VGZ through libvgm") {
+    const auto temp_root = prepareTempRoot("vgm_metadata");
+    const auto vgm_path = createMinimalVgmFile(temp_root, "fixture.vgm");
+    const auto vgz_path = createMinimalVgzFile(temp_root, "fixture.vgz");
+
+    auto vgm_result = MetadataReader::read(vgm_path, MetadataReadOptions{.decode_album_art = false});
+    REQUIRE(vgm_result.has_value());
+    CHECK(vgm_result->decoder_name == "libvgm");
+    CHECK(vgm_result->codec_name == "VGM");
+    CHECK(vgm_result->container_format == "vgm");
+    CHECK(vgm_result->seekable == true);
+    CHECK(vgm_result->sample_rate == 44100);
+    CHECK(vgm_result->bitrate_bps > 0);
+    CHECK(vgm_result->channels == 2);
+    CHECK(vgm_result->channel_layout == "stereo");
+    CHECK(vgm_result->duration_seconds > 0.0);
+    CHECK(vgm_result->title.empty());
+    CHECK(vgm_result->decoder_analysis.size() >= 3);
+    CHECK(decoderAnalysisValue(*vgm_result, "Gapless preload") ==
+          std::optional<std::string>{"supported"});
+    CHECK(decoderAnalysisValue(*vgm_result, "Seek support") ==
+          std::optional<std::string>{"enabled via libvgm sample seek"});
+
+    auto vgz_result = MetadataReader::read(vgz_path, MetadataReadOptions{.decode_album_art = false});
+    REQUIRE(vgz_result.has_value());
+    CHECK(vgz_result->decoder_name == "libvgm");
+    CHECK(vgz_result->container_format == "vgz");
+    CHECK(vgz_result->bitrate_bps > 0);
+    CHECK(vgz_result->duration_seconds > 0.0);
+}
+
+TEST_CASE("MetadataReader - reads GD3 tags and chip analysis from VGM") {
+    const auto temp_root = prepareTempRoot("vgm_tagged_metadata");
+    const auto tagged_vgm = createTaggedVgmFile(temp_root, "tagged.vgm");
+
+    auto result = MetadataReader::read(tagged_vgm, MetadataReadOptions{.decode_album_art = false});
+    REQUIRE(result.has_value());
+
+    const TrackInfo& info = *result;
+    CHECK(info.decoder_name == "libvgm");
+    CHECK(info.title == "Green Hill Zone");
+    CHECK(info.album == "Sonic the Hedgehog");
+    CHECK(info.genre == "Mega Drive");
+    CHECK(info.artist == "Masato Nakamura");
+    CHECK(info.year == "1991");
+    CHECK(info.comment == "Opening theme");
+    CHECK(info.sample_rate == 44100);
+    CHECK(info.bitrate_bps > 0);
+    CHECK(formatMetadataValue(info, "Encoded By") ==
+          std::optional<std::string>{"Test Encoder"});
+    CHECK(formatMetadataValue(info, "Game") ==
+          std::optional<std::string>{"Sonic the Hedgehog"});
+    CHECK(decoderAnalysisValue(info, "Chip summary").has_value());
+    CHECK(decoderAnalysisValue(info, "Playback stop behavior") ==
+          std::optional<std::string>{"stop at end of stream"});
 }
