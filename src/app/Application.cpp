@@ -369,6 +369,11 @@ bool Application::processCommand(const Command& cmd) {
             return true;
 
         } else if constexpr (std::is_same_v<T, CommandOpenFileGapless>) {
+            if (!decoder_.supportsGaplessPreparation() ||
+                !Decoder::supportsGaplessForSource(c.source)) {
+                pending_gapless_request_.clear();
+                return false;
+            }
             pending_gapless_request_.schedule(
                 GaplessPendingRequest{
                     c.source,
@@ -506,6 +511,12 @@ void Application::handleEndOfTrack() {
 }
 
 void Application::maybePreparePendingGaplessTrack() {
+    if (!decoder_.supportsGaplessPreparation()) {
+        clearPreparedGaplessTrack();
+        pending_gapless_request_.clear();
+        return;
+    }
+
     const GaplessPendingRequest* scheduled_request = nullptr;
     if (const GaplessPendingRequest* pending_request = pending_gapless_request_.peek()) {
         scheduled_request = pending_gapless_request_.current(
@@ -514,6 +525,12 @@ void Application::maybePreparePendingGaplessTrack() {
     }
     if (!scheduled_request) {
         clearPreparedGaplessTrack();
+        return;
+    }
+
+    if (!Decoder::supportsGaplessForSource(scheduled_request->source)) {
+        clearPreparedGaplessTrack();
+        pending_gapless_request_.clear();
         return;
     }
     const GaplessPendingRequest* pending_request = scheduled_request;

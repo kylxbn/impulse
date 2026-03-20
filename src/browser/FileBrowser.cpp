@@ -1,15 +1,10 @@
 #include "FileBrowser.hpp"
 
+#include "core/SupportedFormats.hpp"
+
 #include <algorithm>
-#include <cctype>
 #include <optional>
 #include <system_error>
-
-static const char* kAudioExtensions[] = {
-    ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac",
-    ".wav", ".aiff", ".ape", ".wv", ".mpc", ".tta",
-    ".wma", ".dsf", ".dff", ".tak", nullptr
-};
 
 namespace {
 
@@ -64,11 +59,7 @@ void FileBrowser::refreshCurrent() {
 }
 
 bool FileBrowser::isAudioFile(const std::filesystem::path& p) {
-    auto ext = p.extension().string();
-    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    for (const char** e = kAudioExtensions; *e; ++e)
-        if (ext == *e) return true;
-    return false;
+    return isSupportedAudioFilePath(p);
 }
 
 std::vector<std::filesystem::path> FileBrowser::collectAudioFiles(const std::filesystem::path& dir,

@@ -16,6 +16,7 @@ struct TrackInfoField {
 
 struct TrackInfo {
     MediaSource           source;
+    std::string           decoder_name;
 
     // File
     std::filesystem::path path;
@@ -37,7 +38,7 @@ struct TrackInfo {
     int         trailing_padding_samples = 0;
     int         seek_preroll_samples = 0;
     bool        manual_skip_export_enabled = false;
-    std::vector<TrackInfoField> ffmpeg_analysis;
+    std::vector<TrackInfoField> decoder_analysis;
     std::vector<TrackInfoField> stream_metadata;
     std::vector<TrackInfoField> format_metadata;
 
