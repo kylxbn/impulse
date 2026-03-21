@@ -2,6 +2,7 @@
 build/
 build_rel/
 build_release/
+build-release/
 build_*/
 /packaging/arch/pkg/
 /packaging/arch/src/
