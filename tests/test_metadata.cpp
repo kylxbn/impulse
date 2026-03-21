@@ -150,6 +150,66 @@ std::filesystem::path createMinimalVgzFile(const std::filesystem::path& director
     return path;
 }
 
+std::filesystem::path createMinimalModFile(const std::filesystem::path& directory,
+                                           std::string_view filename) {
+    std::vector<uint8_t> bytes;
+    bytes.reserve(20 + 31 * 30 + 2 + 128 + 4 + 1024 + 32);
+
+    const auto appendAscii = [&](std::string_view value, size_t width) {
+        bytes.insert(bytes.end(), value.begin(), value.end());
+        bytes.resize(bytes.size() + (width - std::min(width, value.size())), 0);
+    };
+
+    const auto appendBe16 = [&](uint16_t value) {
+        bytes.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+        bytes.push_back(static_cast<uint8_t>(value & 0xFFu));
+    };
+
+    appendAscii("Test Module", 20);
+    for (int index = 0; index < 31; ++index) {
+        if (index == 0) {
+            appendAscii("Square", 22);
+            appendBe16(16);
+            bytes.push_back(0);
+            bytes.push_back(64);
+            appendBe16(0);
+            appendBe16(16);
+        } else {
+            appendAscii("", 22);
+            appendBe16(0);
+            bytes.push_back(0);
+            bytes.push_back(0);
+            appendBe16(0);
+            appendBe16(0);
+        }
+    }
+
+    bytes.push_back(1);
+    bytes.push_back(0);
+    bytes.resize(bytes.size() + 128, 0);
+    bytes.insert(bytes.end(), {'M', '.', 'K', '.'});
+
+    std::vector<uint8_t> pattern(1024, 0);
+    constexpr uint16_t kPeriodC3 = 428;
+    constexpr uint8_t kSampleIndex = 1;
+    pattern[0] = static_cast<uint8_t>(((kSampleIndex >> 4) << 4) | ((kPeriodC3 >> 8) & 0x0Fu));
+    pattern[1] = static_cast<uint8_t>(kPeriodC3 & 0xFFu);
+    pattern[2] = static_cast<uint8_t>((kSampleIndex & 0x0Fu) << 4);
+    bytes.insert(bytes.end(), pattern.begin(), pattern.end());
+
+    const std::vector<uint8_t> sample_data = {
+        0, 96, 127, 96, 0, 160, 128, 160,
+        0, 96, 127, 96, 0, 160, 128, 160,
+        0, 96, 127, 96, 0, 160, 128, 160,
+        0, 96, 127, 96, 0, 160, 128, 160,
+    };
+    bytes.insert(bytes.end(), sample_data.begin(), sample_data.end());
+
+    const auto path = directory / std::string(filename);
+    writeBinaryFile(path, bytes);
+    return path;
+}
+
 void appendUtf16Le(std::vector<uint8_t>& bytes, std::string_view text) {
     for (const unsigned char ch : text)
         appendLe16(bytes, ch);
@@ -426,6 +486,37 @@ TEST_CASE("MetadataReader - reads VGM and VGZ through libvgm") {
     CHECK(vgz_result->container_format == "vgz");
     CHECK(vgz_result->bitrate_bps > 0);
     CHECK(vgz_result->duration_seconds > 0.0);
+}
+
+TEST_CASE("MetadataReader - reads tracker modules through libopenmpt") {
+    const auto temp_root = prepareTempRoot("openmpt_metadata");
+    const auto mod_path = createMinimalModFile(temp_root, "fixture.mod");
+
+    auto result = MetadataReader::read(mod_path, MetadataReadOptions{.decode_album_art = false});
+    REQUIRE(result.has_value());
+
+    const TrackInfo& info = *result;
+    CHECK(info.decoder_name == "libopenmpt");
+    CHECK(info.codec_name == "ProTracker MOD (M.K.)");
+    CHECK(info.container_format == "mod");
+    CHECK(info.seekable == true);
+    CHECK(info.sample_rate == 48000);
+    CHECK(info.bitrate_bps > 0);
+    CHECK(info.channels == 2);
+    CHECK(info.channel_layout == "stereo");
+    CHECK(info.duration_seconds > 0.0);
+    CHECK(info.title == "Test Module");
+    CHECK(info.decoder_analysis.size() >= 6);
+    CHECK(decoderAnalysisValue(info, "Gapless preload") ==
+          std::optional<std::string>{"supported"});
+    CHECK(decoderAnalysisValue(info, "Seek support") ==
+          std::optional<std::string>{"enabled via libopenmpt time seek"});
+    CHECK(decoderAnalysisValue(info, "Interpolation") ==
+          std::optional<std::string>{"disabled (1-tap / no interpolation)"});
+    CHECK(formatMetadataValue(info, "Format") ==
+          std::optional<std::string>{"mod"});
+    CHECK(formatMetadataValue(info, "Tracker") ==
+          std::optional<std::string>{"Generic ProTracker or compatible"});
 }
 
 TEST_CASE("MetadataReader - reads GD3 tags and chip analysis from VGM") {

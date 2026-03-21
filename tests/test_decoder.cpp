@@ -108,6 +108,67 @@ std::filesystem::path createMinimalVgmFile(const std::filesystem::path& director
     return path;
 }
 
+std::filesystem::path createMinimalModFile(const std::filesystem::path& directory,
+                                           std::string_view filename) {
+    std::vector<uint8_t> bytes;
+    bytes.reserve(20 + 31 * 30 + 2 + 128 + 4 + 1024 + 32);
+
+    const auto appendAscii = [&](std::string_view value, size_t width) {
+        bytes.insert(bytes.end(), value.begin(), value.end());
+        bytes.resize(bytes.size() + (width - std::min(width, value.size())), 0);
+    };
+
+    const auto appendBe16 = [&](uint16_t value) {
+        bytes.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+        bytes.push_back(static_cast<uint8_t>(value & 0xFFu));
+    };
+
+    appendAscii("Test Module", 20);
+    for (int index = 0; index < 31; ++index) {
+        if (index == 0) {
+            appendAscii("Square", 22);
+            appendBe16(16); // 32 bytes of sample data
+            bytes.push_back(0);   // finetune
+            bytes.push_back(64);  // volume
+            appendBe16(0);        // loop start
+            appendBe16(16);       // loop length
+        } else {
+            appendAscii("", 22);
+            appendBe16(0);
+            bytes.push_back(0);
+            bytes.push_back(0);
+            appendBe16(0);
+            appendBe16(0);
+        }
+    }
+
+    bytes.push_back(1); // song length
+    bytes.push_back(0); // restart
+    bytes.resize(bytes.size() + 128, 0);
+    bytes.insert(bytes.end(), {'M', '.', 'K', '.'});
+
+    std::vector<uint8_t> pattern(1024, 0);
+    constexpr uint16_t kPeriodC3 = 428;
+    constexpr uint8_t kSampleIndex = 1;
+    pattern[0] = static_cast<uint8_t>(((kSampleIndex >> 4) << 4) | ((kPeriodC3 >> 8) & 0x0Fu));
+    pattern[1] = static_cast<uint8_t>(kPeriodC3 & 0xFFu);
+    pattern[2] = static_cast<uint8_t>((kSampleIndex & 0x0Fu) << 4);
+    pattern[3] = 0;
+    bytes.insert(bytes.end(), pattern.begin(), pattern.end());
+
+    const std::vector<uint8_t> sample_data = {
+        0, 96, 127, 96, 0, 160, 128, 160,
+        0, 96, 127, 96, 0, 160, 128, 160,
+        0, 96, 127, 96, 0, 160, 128, 160,
+        0, 96, 127, 96, 0, 160, 128, 160,
+    };
+    bytes.insert(bytes.end(), sample_data.begin(), sample_data.end());
+
+    const auto path = directory / std::string(filename);
+    writeBinaryFile(path, bytes);
+    return path;
+}
+
 std::filesystem::path createSn76489ToneBurstVgmFile(const std::filesystem::path& directory,
                                                     std::string_view filename,
                                                     bool loop_at_end = false) {
@@ -203,17 +264,21 @@ TEST_CASE("Decoder - sequential opens decode audio safely") {
 
 TEST_CASE("DecoderProvider selects specialized backends before FFmpeg fallback") {
     const MediaSource vgm_source = MediaSource::fromPath("fixture.vgz");
+    const MediaSource mod_source = MediaSource::fromPath("fixture.mod");
     const MediaSource wav_source = MediaSource::fromPath("fixture.wav");
     const MediaSource url_source = MediaSource::fromUrl("https://example.com/live-stream");
 
     CHECK(decoderProviderForSource(vgm_source).name() == "libvgm");
+    CHECK(decoderProviderForSource(mod_source).name() == "libopenmpt");
     CHECK(decoderProviderForSource(wav_source).name() == "FFmpeg");
     CHECK(decoderProviderForSource(url_source).name() == "FFmpeg");
     CHECK(Decoder::supportsGaplessForSource(vgm_source) == true);
+    CHECK(Decoder::supportsGaplessForSource(mod_source) == true);
     CHECK(Decoder::supportsGaplessForSource(wav_source) == true);
     CHECK(Decoder::supportsGaplessForSource(url_source) == false);
 
     CHECK(decoderProviderForSource(vgm_source).capabilitiesForSource(vgm_source).can_seek == true);
+    CHECK(decoderProviderForSource(mod_source).capabilitiesForSource(mod_source).can_seek == true);
     CHECK(decoderProviderForSource(wav_source).capabilitiesForSource(wav_source).can_seek == true);
     CHECK(decoderProviderForSource(url_source).capabilitiesForSource(url_source).can_seek == false);
 }
@@ -255,6 +320,28 @@ TEST_CASE("Decoder - VGM backend decodes minimal VGM audio") {
     CHECK(!pcm.empty());
 }
 
+TEST_CASE("Decoder - libopenmpt backend decodes minimal MOD audio") {
+    const auto temp_dir = prepareTempRoot("openmpt_open");
+    const auto mod_track = createMinimalModFile(temp_dir, "fixture.mod");
+
+    Decoder decoder;
+    std::vector<float> pcm;
+
+    auto open_result = decoder.open(mod_track, 48000);
+    REQUIRE(open_result.ok);
+    CHECK(decoder.trackInfo().decoder_name == "libopenmpt");
+    CHECK(decoder.trackInfo().seekable == true);
+    CHECK(decoder.trackInfo().sample_rate == 48000);
+    CHECK(decoder.capabilities().can_seek == true);
+    CHECK(decoder.supportsGaplessPreparation() == true);
+    CHECK(decoder.capabilities().supports_gapless == true);
+    CHECK(decoder.instantaneousBitrateBps() > 0);
+    CHECK(decoder.totalFrames() > 0);
+    CHECK(decoder.decodeNextFrames(pcm) > 0);
+    CHECK(!pcm.empty());
+    CHECK(peakAbsSample(pcm) > 0.0005f);
+}
+
 TEST_CASE("Decoder - sequential opens can switch between VGM and FFmpeg backends") {
     const auto temp_dir = prepareTempRoot("mixed_backends");
     const auto vgm_track = createMinimalVgmFile(temp_dir, "fixture.vgm");
@@ -265,6 +352,27 @@ TEST_CASE("Decoder - sequential opens can switch between VGM and FFmpeg backends
 
     auto vgm_open = decoder.open(vgm_track, 48000);
     REQUIRE(vgm_open.ok);
+    CHECK(decoder.decodeNextFrames(pcm) > 0);
+
+    auto wav_open = decoder.open(wav_track, 48000);
+    REQUIRE(wav_open.ok);
+    CHECK(decoder.trackInfo().decoder_name == "FFmpeg");
+    CHECK(decoder.capabilities().can_seek == true);
+    CHECK(decoder.capabilities().supports_gapless == true);
+    CHECK(decoder.decodeNextFrames(pcm) > 0);
+}
+
+TEST_CASE("Decoder - sequential opens can switch between libopenmpt and FFmpeg backends") {
+    const auto temp_dir = prepareTempRoot("openmpt_ffmpeg_backends");
+    const auto mod_track = createMinimalModFile(temp_dir, "fixture.mod");
+    const auto wav_track = createTestWaveFile(temp_dir, "fixture.wav", 440.0);
+
+    Decoder decoder;
+    std::vector<float> pcm;
+
+    auto mod_open = decoder.open(mod_track, 48000);
+    REQUIRE(mod_open.ok);
+    CHECK(decoder.trackInfo().decoder_name == "libopenmpt");
     CHECK(decoder.decodeNextFrames(pcm) > 0);
 
     auto wav_open = decoder.open(wav_track, 48000);
@@ -337,6 +445,26 @@ TEST_CASE("Decoder - VGM backend can seek by sample position") {
 
     CHECK(meanAbsSample(first_chunk) > 0.001f);
     CHECK(meanAbsSample(sought_chunk) < meanAbsSample(first_chunk) * 0.25f);
+}
+
+TEST_CASE("Decoder - libopenmpt backend can seek by time position") {
+    const auto temp_dir = prepareTempRoot("openmpt_seek");
+    const auto mod_track = createMinimalModFile(temp_dir, "seek.mod");
+
+    Decoder decoder;
+    std::vector<float> first_chunk;
+    std::vector<float> sought_chunk;
+
+    auto open_result = decoder.open(mod_track, 48000);
+    REQUIRE(open_result.ok);
+    REQUIRE(decoder.trackInfo().seekable == true);
+
+    REQUIRE(decoder.decodeNextFrames(first_chunk) > 0);
+    REQUIRE(decoder.seek(1.0));
+    REQUIRE(decoder.decodeNextFrames(sought_chunk) > 0);
+
+    CHECK(meanAbsSample(first_chunk) > 0.0001f);
+    CHECK(meanAbsSample(sought_chunk) > 0.0001f);
 }
 
 TEST_CASE("Decoder - failed open leaves decoder in a closed state") {

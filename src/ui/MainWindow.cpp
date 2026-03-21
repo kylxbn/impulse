@@ -1960,7 +1960,7 @@ void MainWindow::renderAboutPopup() {
     ImGui::Spacing();
     ImGui::TextWrapped("%s", kAppTagline.data());
     ImGui::Spacing();
-    ImGui::TextDisabled("Built with SDL3, Dear ImGui, FFmpeg, and PipeWire.");
+    ImGui::TextDisabled("Built with SDL3, Dear ImGui, FFmpeg, libopenmpt, and PipeWire.");
     ImGui::Separator();
     ImGui::TextDisabled("Licensing");
     ImGui::BulletText("Impulse: %s", kProjectLicenseName.data());
@@ -1976,7 +1976,7 @@ void MainWindow::renderAboutPopup() {
         ImGui::Spacing();
         ImGui::TextWrapped(
             "Impulse also links against system-provided libraries including SDL3, FFmpeg, "
-            "PipeWire, and systemd/libsystemd.");
+            "libopenmpt, PipeWire, and systemd/libsystemd.");
         ImGui::TextWrapped(
             "These libraries are not redistributed in this repository and remain under their "
             "respective upstream and distribution licenses.");

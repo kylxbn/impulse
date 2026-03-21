@@ -27,7 +27,9 @@ Static dependencies:
 
 Runtime dependencies:
 
-- `ffmpeg` (the actual decoder)
+- `libvgm` (for VGM file playback)
+- `libopenmpt` (for tracker / module playback)
+- `ffmpeg` (fallback decoder)
 - `pipewire` (for audio output. Sorry, no other option.)
 - `sdl3` (for Wayland support and GUI)
 - `systemd-libs` (for MPRIS)

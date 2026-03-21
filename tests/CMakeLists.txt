@@ -21,12 +21,14 @@ set(IMPULSE_SHARED_SOURCES
 set(IMPULSE_METADATA_SOURCES
     ${CMAKE_SOURCE_DIR}/src/metadata/MetadataReader.cpp
     ${CMAKE_SOURCE_DIR}/src/metadata/FFmpegMetadataReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/metadata/OpenMptMetadataReader.cpp
     ${CMAKE_SOURCE_DIR}/src/metadata/VgmMetadataReader.cpp)
 
 set(IMPULSE_DECODER_SOURCES
     ${CMAKE_SOURCE_DIR}/src/audio/Decoder.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/DecoderProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/FFmpegDecoderBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/OpenMptDecoderBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/VgmDecoderBackend.cpp)
 
 function(add_impulse_test name sources)
@@ -91,7 +93,7 @@ add_executable(test_metadata
 target_include_directories(test_metadata PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
-target_link_libraries(test_metadata PRIVATE PkgConfig::LIBAV vgm-player vgm-emu vgm-utils)
+target_link_libraries(test_metadata PRIVATE PkgConfig::LIBAV PkgConfig::LIBOPENMPT vgm-player vgm-emu vgm-utils)
 target_compile_features(test_metadata PRIVATE cxx_std_23)
 add_test(NAME test_metadata COMMAND test_metadata)
 
@@ -114,7 +116,7 @@ add_executable(test_decoder
 target_include_directories(test_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
-target_link_libraries(test_decoder PRIVATE PkgConfig::LIBAV vgm-player vgm-emu vgm-utils)
+target_link_libraries(test_decoder PRIVATE PkgConfig::LIBAV PkgConfig::LIBOPENMPT vgm-player vgm-emu vgm-utils)
 target_compile_features(test_decoder PRIVATE cxx_std_23)
 add_test(NAME test_decoder COMMAND test_decoder)
 

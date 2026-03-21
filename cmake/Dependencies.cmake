@@ -3,6 +3,7 @@ find_package(PkgConfig REQUIRED)
 # System libraries via pkg-config
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
     libavformat libavcodec libavutil libswresample libswscale)
+pkg_check_modules(LIBOPENMPT REQUIRED IMPORTED_TARGET libopenmpt)
 pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
 pkg_check_modules(SYSTEMD REQUIRED IMPORTED_TARGET libsystemd)

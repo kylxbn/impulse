@@ -1,6 +1,7 @@
 #include "audio/DecoderProvider.hpp"
 
 #include "audio/FFmpegDecoderBackend.hpp"
+#include "audio/OpenMptDecoderBackend.hpp"
 #include "audio/VgmDecoderBackend.hpp"
 
 #include <array>
@@ -10,8 +11,9 @@
 namespace {
 
 const auto& decoderProviders() {
-    static const std::array<const DecoderProvider*, 2> kProviders = {
+    static const std::array<const DecoderProvider*, 3> kProviders = {
         &vgmDecoderProvider(),
+        &openMptDecoderProvider(),
         &ffmpegDecoderProvider(),
     };
     return kProviders;

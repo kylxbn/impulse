@@ -19,6 +19,13 @@ constexpr std::array<std::string_view, 17> kSupportedAudioExtensions = {
     ".wma", ".dsf", ".dff", ".tak", ".vgm",
 };
 
+constexpr std::array<std::string_view, 22> kTrackerModuleExtensions = {
+    ".mod", ".xm",  ".it",  ".s3m", ".mptm", ".mtm",
+    ".stm", ".ult", ".med", ".okt", ".669",  ".amf",
+    ".ams", ".dbm", ".dmf", ".dsm", ".far",  ".mdl",
+    ".mt2", ".psm", ".umx", ".mo3",
+};
+
 }  // namespace
 
 bool isVgmExtension(std::string_view extension) {
@@ -26,8 +33,19 @@ bool isVgmExtension(std::string_view extension) {
     return normalized == ".vgm" || normalized == ".vgz";
 }
 
+bool isTrackerModuleExtension(std::string_view extension) {
+    const std::string normalized = normalizeExtension(extension);
+    for (const auto supported : kTrackerModuleExtensions) {
+        if (normalized == supported)
+            return true;
+    }
+    return false;
+}
+
 bool isSupportedAudioExtension(std::string_view extension) {
     if (isVgmExtension(extension))
+        return true;
+    if (isTrackerModuleExtension(extension))
         return true;
 
     const std::string normalized = normalizeExtension(extension);
