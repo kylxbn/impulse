@@ -43,6 +43,7 @@ endfunction()
 
 add_impulse_test(test_ringbuffer test_ringbuffer.cpp)
 add_impulse_test(test_bitrate_span_queue test_bitrate_span_queue.cpp)
+add_impulse_test(test_peak_span_queue test_peak_span_queue.cpp)
 add_impulse_test(test_replay_gain test_replay_gain.cpp)
 add_impulse_test(test_playback_status_utils test_playback_status_utils.cpp)
 add_impulse_test(test_gapless_trimmer test_gapless_trimmer.cpp)
