@@ -57,17 +57,23 @@ AudioOutput::~AudioOutput() {
 // ---------------------------------------------------------------------------
 bool AudioOutput::init(Ring&                 ring,
                        BitrateRing&          bitrate_ring,
+                       PeakRing&             peak_ring,
                        std::atomic<int64_t>& frame_counter,
                        std::atomic<int>&     seek_generation,
                        std::atomic<int64_t>& current_bitrate_bps,
+                       std::atomic<float>&   current_peak_abs,
+                       std::atomic<bool>&    clipped_detected,
                        std::atomic<float>&   stream_volume,
                        WakeCallback          wake_callback,
                        void*                 wake_userdata) {
     ring_                 = &ring;
     bitrate_ring_         = &bitrate_ring;
+    peak_ring_            = &peak_ring;
     frame_ctr_            = &frame_counter;
     seek_gen_             = &seek_generation;
     current_bitrate_bps_  = &current_bitrate_bps;
+    current_peak_abs_     = &current_peak_abs;
+    clipped_detected_     = &clipped_detected;
     observed_volume_      = &stream_volume;
     wake_callback_        = wake_callback;
     wake_userdata_        = wake_userdata;
@@ -298,6 +304,7 @@ void AudioOutput::onProcess(void* userdata) {
         self->observed_seek_gen_.store(gen, std::memory_order_release);
         self->observed_seek_gen_.notify_all();
         self->current_bitrate_bps_->store(0, std::memory_order_relaxed);
+        self->current_peak_abs_->store(0.0f, std::memory_order_relaxed);
         self->underrun_detected_.store(false, std::memory_order_relaxed);
         std::memset(dst, 0, n_frames * self->config_.channels * sizeof(float));
         spabuf->datas[0].chunk->offset = 0;
@@ -310,6 +317,7 @@ void AudioOutput::onProcess(void* userdata) {
 
     if (self->paused_.load(std::memory_order_relaxed)) {
         self->current_bitrate_bps_->store(0, std::memory_order_relaxed);
+        self->current_peak_abs_->store(0.0f, std::memory_order_relaxed);
         self->underrun_detected_.store(false, std::memory_order_relaxed);
         std::memset(dst, 0, n_frames * self->config_.channels * sizeof(float));
         spabuf->datas[0].chunk->offset = 0;
@@ -334,7 +342,13 @@ void AudioOutput::onProcess(void* userdata) {
     const int64_t current_bitrate = got_frames > 0
         ? self->bitrate_ring_->consumeFrames(got_frames)
         : 0;
+    const PeakConsumeResult current_peak = got_frames > 0
+        ? self->peak_ring_->consumeFrames(got_frames)
+        : PeakConsumeResult{};
     self->current_bitrate_bps_->store(current_bitrate, std::memory_order_relaxed);
+    self->current_peak_abs_->store(current_peak.peak_abs, std::memory_order_relaxed);
+    if (current_peak.clipped)
+        self->clipped_detected_->store(true, std::memory_order_relaxed);
 
     // Advance frame counter (frames, not samples)
     self->frame_ctr_->fetch_add(

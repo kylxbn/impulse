@@ -3,6 +3,7 @@
 #include "audio/AudioOutput.hpp"
 #include "audio/BitrateSpanQueue.hpp"
 #include "audio/Decoder.hpp"
+#include "audio/PeakSpanQueue.hpp"
 #include "audio/RingBuffer.hpp"
 #include "app/GaplessPendingRequest.hpp"
 #include "app/GaplessTrackQueue.hpp"
@@ -64,6 +65,9 @@ public:
     double               durationSeconds() const;
     float                volume()          const;
     int64_t              instantaneousBitrateBps() const;
+    float                currentPeakAbs()  const;
+    bool                 clippedDetected() const;
+    void                 clearClippedIndicator();
     size_t               bufferedSamples() const;
     size_t               ringReadPosition() const;
     size_t               ringWritePosition() const;
@@ -100,6 +104,7 @@ private:
     void maybePublishTrackInfoUpdate();
     void clearGaplessTrackSwitches();
     void publishNowPlaying(std::shared_ptr<NowPlayingTrack> now_playing);
+    void resetCurrentPlaybackTelemetry() noexcept;
     uint64_t currentPlaylistRevision(uint64_t playlist_tab_id) const;
     uint64_t currentGaplessPolicyGeneration() const;
     uint32_t clampBufferAheadFrames(float seconds) const;
@@ -123,6 +128,7 @@ private:
     // --- Audio pipeline ---
     AudioOutput::Ring audio_ring_;
     AudioOutput::BitrateRing bitrate_ring_;
+    AudioOutput::PeakRing peak_ring_;
     AudioOutput       audio_output_;
     Decoder           decoder_;
 

@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -17,6 +19,27 @@ constexpr float kGaplessPrepareTargetSeconds = 1.0f;
 constexpr int kMaxLiveStreamReconnectAttempts = 3;
 constexpr auto kCommandRetryDelay = 1ms;
 constexpr auto kLiveStreamReconnectDelay = 500ms;
+
+struct PeakTelemetry {
+    float peak_abs = 0.0f;
+    bool  clipped = false;
+};
+
+PeakTelemetry analyzePeakTelemetry(const float* samples, size_t sample_count) {
+    PeakTelemetry telemetry{};
+    for (size_t i = 0; i < sample_count; ++i) {
+        const float magnitude = std::abs(samples[i]);
+        if (!std::isfinite(magnitude)) {
+            telemetry.peak_abs = std::numeric_limits<float>::infinity();
+            telemetry.clipped = true;
+            return telemetry;
+        }
+        telemetry.peak_abs = std::max(telemetry.peak_abs, magnitude);
+    }
+
+    telemetry.clipped = telemetry.peak_abs > 1.0f;
+    return telemetry;
+}
 
 }  // namespace
 
@@ -65,9 +88,12 @@ int Application::run() {
     // Start audio output
     if (!audio_output_.init(audio_ring_,
                             bitrate_ring_,
+                            peak_ring_,
                             playback_state_.current_frame,
                             playback_state_.seek_generation,
                             playback_state_.current_bitrate_bps,
+                            playback_state_.current_peak_abs,
+                            playback_state_.clipped_detected,
                             playback_state_.volume,
                             &Application::onAudioOutputProgress,
                             this)) {
@@ -141,7 +167,7 @@ void Application::decodeLoop(std::stop_token stop) {
                 : 0;
             const size_t available_startup_frames = bufferedFrames() + pending_frames;
             if (decoder_reached_eof && available_startup_frames == 0) {
-                playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+                resetCurrentPlaybackTelemetry();
                 playback_state_.status.store(PlaybackStatus::Error, std::memory_order_relaxed);
                 publishNowPlaying(nullptr);
                 continue;
@@ -149,7 +175,7 @@ void Application::decodeLoop(std::stop_token stop) {
         } else if (live_stream &&
                    audio_output_.consumeUnderrunDetected() &&
                    !playback_state_.decoder_reached_eof.load(std::memory_order_relaxed)) {
-            playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+            resetCurrentPlaybackTelemetry();
             live_stream_reconnect_attempts_ = 0;
             playback_state_.status.store(PlaybackStatus::Buffering, std::memory_order_relaxed);
             audio_output_.setPaused(true);
@@ -204,7 +230,7 @@ void Application::decodeLoop(std::stop_token stop) {
                                             kLiveStreamReconnectDelay);
                     continue;
                 }
-                playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+                resetCurrentPlaybackTelemetry();
                 playback_state_.status.store(PlaybackStatus::Error,
                                              std::memory_order_relaxed);
                 pending_pcm.clear();
@@ -228,7 +254,7 @@ void Application::decodeLoop(std::stop_token stop) {
                 current_status != PlaybackStatus::Buffering)
                 break;
 
-            if (!bitrate_ring_.canPush()) {
+            if (!bitrate_ring_.canPush() || !peak_ring_.canPush()) {
                 waitForDecodeLoopSignal(stop,
                                         decode_wakeup_generation_.load(std::memory_order_acquire));
                 continue;
@@ -249,13 +275,18 @@ void Application::decodeLoop(std::stop_token stop) {
                 continue;
             }
 
-            if (!bitrate_ring_.push(frames_written, pending_bitrate_bps)) {
-                waitForDecodeLoopSignal(stop,
-                                        decode_wakeup_generation_.load(std::memory_order_acquire));
-                continue;
-            }
-
-            pending_samples += static_cast<size_t>(frames_written * channels);
+            const size_t written_samples = static_cast<size_t>(frames_written) * channels;
+            const PeakTelemetry peak_telemetry =
+                analyzePeakTelemetry(pending_pcm.data() + pending_samples, written_samples);
+            const bool queued_bitrate =
+                bitrate_ring_.push(frames_written, pending_bitrate_bps);
+            const bool queued_peak =
+                peak_ring_.push(frames_written,
+                                peak_telemetry.peak_abs,
+                                peak_telemetry.clipped);
+            (void) queued_bitrate;
+            (void) queued_peak;
+            pending_samples += written_samples;
         }
 
         if (playback_state_.status.load(std::memory_order_relaxed) == PlaybackStatus::Buffering) {
@@ -301,10 +332,11 @@ void Application::discardBufferedAudio(int64_t target_frame) {
 
     audio_ring_.reset();
     bitrate_ring_.reset();
+    peak_ring_.reset();
     clearPendingGaplessState();
     clearGaplessTrackSwitches();
     playback_state_.decoder_reached_eof.store(false, std::memory_order_relaxed);
-    playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+    resetCurrentPlaybackTelemetry();
     playback_state_.current_frame.store(target_frame, std::memory_order_relaxed);
 }
 
@@ -339,7 +371,7 @@ bool Application::reconnectCurrentLiveStream() {
     const uint64_t playlist_item_id = now_playing ? now_playing->playlist_item_id : 0;
 
     audio_output_.setPaused(true);
-    playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+    resetCurrentPlaybackTelemetry();
     playback_state_.decoder_reached_eof.store(false, std::memory_order_relaxed);
     playback_state_.status.store(PlaybackStatus::Buffering, std::memory_order_relaxed);
     discardBufferedAudio(0);
@@ -459,7 +491,7 @@ bool Application::openTrack(const MediaSource& source,
 
     auto result = decoder_.open(source, audio_output_.config().sample_rate);
     if (!result.ok) {
-        playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+        resetCurrentPlaybackTelemetry();
         if (!preserve_buffered_audio) {
             publishNowPlaying(nullptr);
             playback_state_.status.store(PlaybackStatus::Error,
@@ -488,7 +520,7 @@ bool Application::openTrack(const MediaSource& source,
         publishNowPlaying(std::move(now_playing));
     }
 
-    playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+    resetCurrentPlaybackTelemetry();
     const bool buffering_stream = decoder_.trackInfo().is_stream;
     if (buffering_stream)
         live_stream_reconnect_attempts_ = 0;
@@ -501,7 +533,7 @@ bool Application::openTrack(const MediaSource& source,
 
 // ---------------------------------------------------------------------------
 void Application::handleEndOfTrack() {
-    playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+    resetCurrentPlaybackTelemetry();
     const bool has_pending_track =
         prepared_gapless_track_.has_value() || pending_gapless_request_.peek() != nullptr;
     playback_state_.status.store(has_pending_track ? PlaybackStatus::EndOfTrack
@@ -551,7 +583,7 @@ void Application::maybePreparePendingGaplessTrack() {
         auto result = decoder_.open(pending_request->source, audio_output_.config().sample_rate);
         if (!result.ok) {
             pending_gapless_request_.clear();
-            playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+            resetCurrentPlaybackTelemetry();
             return;
         }
 
@@ -580,7 +612,7 @@ void Application::maybePreparePendingGaplessTrack() {
         if (result < 0) {
             clearPreparedGaplessTrack();
             pending_gapless_request_.clear();
-            playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+            resetCurrentPlaybackTelemetry();
             return;
         }
 
@@ -637,7 +669,7 @@ bool Application::maybeCommitPreparedGaplessTrack(std::vector<float>& pending_pc
     pending_bitrate_bps = prepared.staged_bitrate_bps;
 
     playback_state_.decoder_reached_eof.store(false, std::memory_order_relaxed);
-    playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+    resetCurrentPlaybackTelemetry();
     audio_output_.setPaused(false);
     playback_state_.status.store(PlaybackStatus::Playing, std::memory_order_relaxed);
     return true;
@@ -671,6 +703,11 @@ void Application::clearGaplessTrackSwitches() {
 
 void Application::publishNowPlaying(std::shared_ptr<NowPlayingTrack> now_playing) {
     now_playing_.store(std::move(now_playing));
+}
+
+void Application::resetCurrentPlaybackTelemetry() noexcept {
+    playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+    playback_state_.current_peak_abs.store(0.0f, std::memory_order_relaxed);
 }
 
 uint32_t Application::clampBufferAheadFrames(float seconds) const {
@@ -767,7 +804,7 @@ void Application::commandPlay() {
     if (playback_state_.status.load(std::memory_order_relaxed) != PlaybackStatus::Paused)
         return;
 
-    playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+    resetCurrentPlaybackTelemetry();
     const bool live_stream = decoder_.is_open() && decoder_.trackInfo().is_stream;
     if (live_stream) {
         const size_t target_ahead_frames =
@@ -795,7 +832,7 @@ void Application::commandPause() {
         status != PlaybackStatus::Buffering)
         return;
 
-    playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
+    resetCurrentPlaybackTelemetry();
     playback_state_.status.store(PlaybackStatus::Paused, std::memory_order_relaxed);
     audio_output_.setPaused(true);
     signalDecodeLoop();
@@ -857,6 +894,18 @@ float Application::volume() const {
 
 int64_t Application::instantaneousBitrateBps() const {
     return playback_state_.current_bitrate_bps.load(std::memory_order_relaxed);
+}
+
+float Application::currentPeakAbs() const {
+    return playback_state_.current_peak_abs.load(std::memory_order_relaxed);
+}
+
+bool Application::clippedDetected() const {
+    return playback_state_.clipped_detected.load(std::memory_order_relaxed);
+}
+
+void Application::clearClippedIndicator() {
+    playback_state_.clipped_detected.store(false, std::memory_order_relaxed);
 }
 
 size_t Application::bufferedSamples() const {

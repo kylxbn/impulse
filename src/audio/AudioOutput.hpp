@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BitrateSpanQueue.hpp"
+#include "PeakSpanQueue.hpp"
 #include "RingBuffer.hpp"
 #include "core/AudioFormat.hpp"
 
@@ -31,9 +32,11 @@ public:
     // Streams can arrive in very small decoded chunks while playback is still
     // paused for startup buffering, so keep generous headroom here.
     static constexpr size_t kBitrateSpanCapacity = 1 << 16;
+    static constexpr size_t kPeakSpanCapacity = 1 << 16;
 
     using Ring = RingBuffer<float, kRingCapacity>;
     using BitrateRing = BitrateSpanQueue<kBitrateSpanCapacity>;
+    using PeakRing = PeakSpanQueue<kPeakSpanCapacity>;
 
     struct Config {
         uint32_t sample_rate   = 48000;
@@ -52,9 +55,12 @@ public:
     // must outlive this object.
     bool init(Ring&                  ring,
               BitrateRing&           bitrate_ring,
+              PeakRing&              peak_ring,
               std::atomic<int64_t>&  frame_counter,
               std::atomic<int>&      seek_generation,
               std::atomic<int64_t>&  current_bitrate_bps,
+              std::atomic<float>&    current_peak_abs,
+              std::atomic<bool>&     clipped_detected,
               std::atomic<float>&    stream_volume,
               WakeCallback           wake_callback = nullptr,
               void*                  wake_userdata = nullptr);
@@ -93,9 +99,12 @@ private:
     // Shared state (not owned)
     Ring*                  ring_        = nullptr;
     BitrateRing*           bitrate_ring_ = nullptr;
+    PeakRing*              peak_ring_   = nullptr;
     std::atomic<int64_t>*  frame_ctr_   = nullptr;
     std::atomic<int>*      seek_gen_    = nullptr;
     std::atomic<int64_t>*  current_bitrate_bps_ = nullptr;
+    std::atomic<float>*    current_peak_abs_ = nullptr;
+    std::atomic<bool>*     clipped_detected_ = nullptr;
     std::atomic<float>*    observed_volume_ = nullptr;
 
     // PW-thread-local (only written from on_process)

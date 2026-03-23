@@ -224,6 +224,44 @@ std::string formatVolumeDbLabel(float linear_gain) {
     return std::format("{:.1f} dB", linearGainToDb(clamped_gain));
 }
 
+float peakAbsToDbfs(float peak_abs) {
+    if (peak_abs <= 0.0f)
+        return -std::numeric_limits<float>::infinity();
+
+    return 20.0f * std::log10(peak_abs);
+}
+
+std::string formatPeakDbfsValue(float peak_abs) {
+    if (peak_abs <= 0.0f)
+        return "-inf";
+
+    const float peak_dbfs = peakAbsToDbfs(peak_abs);
+    if (!std::isfinite(peak_dbfs))
+        return "Clipped";
+    if (peak_dbfs > 0.0f)
+        return std::format("+{:.1f}", peak_dbfs);
+    return std::format("{:.1f}", peak_dbfs);
+}
+
+float peakMeterFraction(float peak_abs, float max_peak_abs) {
+    if (peak_abs <= 0.0f)
+        return 0.0f;
+
+    const float peak_dbfs = std::max(peakAbsToDbfs(peak_abs), kMinVolumeDb);
+    const float max_peak_dbfs = std::max(peakAbsToDbfs(max_peak_abs), 0.0f);
+    const float meter_span_db = max_peak_dbfs - kMinVolumeDb;
+    if (meter_span_db <= 0.0f)
+        return 0.0f;
+
+    return std::clamp((peak_dbfs - kMinVolumeDb) / meter_span_db,
+                      0.0f,
+                      1.0f);
+}
+
+std::string formatPeakDbfsLabel(float peak_abs) {
+    return std::format("{} dBFS", formatPeakDbfsValue(peak_abs));
+}
+
 const char* replayGainModeLabel(ReplayGain::GainMode mode) {
     switch (mode) {
         case ReplayGain::GainMode::None:  return "None";
@@ -731,6 +769,7 @@ MainWindow::RenderSnapshot MainWindow::captureRenderSnapshot() const {
     const double position_seconds = app_.positionSeconds();
     const double duration_seconds = app_.durationSeconds();
     const int64_t instantaneous_bitrate_bps = app_.instantaneousBitrateBps();
+    const float current_peak_abs = app_.currentPeakAbs();
     const size_t ring_capacity_samples = app_.ringCapacitySamples();
     const size_t ring_read = app_.ringReadPosition() % std::max<size_t>(ring_capacity_samples, 1);
     const size_t ring_write = app_.ringWritePosition() % std::max<size_t>(ring_capacity_samples, 1);
@@ -742,6 +781,8 @@ MainWindow::RenderSnapshot MainWindow::captureRenderSnapshot() const {
         .position_ticks = static_cast<int64_t>(position_seconds * 20.0),
         .duration_ticks = static_cast<int64_t>(duration_seconds * 20.0),
         .bitrate_kbps = instantaneous_bitrate_bps > 0 ? instantaneous_bitrate_bps / 1000 : 0,
+        .peak_abs = current_peak_abs,
+        .clipped_detected = app_.clippedDetected(),
         .ring_read_bucket = ring_read / 1024,
         .ring_write_bucket = ring_write / 1024,
         .volume_centidb = static_cast<int>(std::lround(linearGainToDb(app_.volume()) * 100.0f)),
@@ -755,6 +796,8 @@ bool MainWindow::RenderSnapshot::operator==(const RenderSnapshot& other) const {
            position_ticks == other.position_ticks &&
            duration_ticks == other.duration_ticks &&
            bitrate_kbps == other.bitrate_kbps &&
+           peak_abs == other.peak_abs &&
+           clipped_detected == other.clipped_detected &&
            ring_read_bucket == other.ring_read_bucket &&
            ring_write_bucket == other.ring_write_bucket &&
            volume_centidb == other.volume_centidb;
@@ -1428,6 +1471,8 @@ void MainWindow::renderTransportWindow() {
     double dur  = app_.durationSeconds();
     float volume_linear = std::clamp(app_.volume(), 0.0f, 1.0f);
     const int64_t instant_bitrate_bps = app_.instantaneousBitrateBps();
+    const float current_peak_abs = std::max(app_.currentPeakAbs(), 0.0f);
+    const bool clipped_detected = app_.clippedDetected();
     const size_t buffered_samples = app_.bufferedSamples();
     const size_t ring_capacity_samples = app_.ringCapacitySamples();
     const size_t ring_read = app_.ringReadPosition() % std::max<size_t>(ring_capacity_samples, 1);
@@ -1435,6 +1480,8 @@ void MainWindow::renderTransportWindow() {
     const float current_kbps = instant_bitrate_bps > 0
         ? static_cast<float>(instant_bitrate_bps) / 1000.0f
         : 0.0f;
+    const float displayed_peak_abs = std::max(current_peak_abs, 1.0f);
+    const std::string peak_meter_label = formatPeakDbfsLabel(current_peak_abs);
     if (!sameSharedOwner(info, bitrate_peak_track_)) {
         bitrate_peak_track_ = info;
         bitrate_bar_peak_kbps_ = 0.0f;
@@ -1457,7 +1504,7 @@ void MainWindow::renderTransportWindow() {
                           ImGuiTableFlags_SizingStretchProp,
                           ImVec2(-1.0f, 0.0f))) {
         ImGui::TableSetupColumn("playback", ImGuiTableColumnFlags_WidthStretch, 3.0f);
-        ImGui::TableSetupColumn("metrics", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("metrics", ImGuiTableColumnFlags_WidthStretch, 1.35f);
 
         ImGui::TableNextColumn();
         if (info) {
@@ -1520,11 +1567,30 @@ void MainWindow::renderTransportWindow() {
         }
 
         ImGui::TableNextColumn();
-        if (ImGui::BeginTable("transport_metrics", 2,
+        if (ImGui::BeginTable("transport_metrics", 3,
                               ImGuiTableFlags_SizingStretchProp,
                               ImVec2(-1.0f, 0.0f))) {
-            ImGui::TableSetupColumn("bitrate", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-            ImGui::TableSetupColumn("ring", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("peak", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("bitrate", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("ring", ImGuiTableColumnFlags_WidthStretch, 1.15f);
+
+            ImGui::TableNextColumn();
+            ImGui::Text("Peak");
+            ImGui::ProgressBar(peakMeterFraction(current_peak_abs, displayed_peak_abs),
+                               ImVec2(-1.0f, 0.0f),
+                               peak_meter_label.c_str());
+            if (clipped_detected) {
+                ImGui::PushStyleColor(ImGuiCol_Text, kReplayGainClipTextColor);
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.32f, 0.07f, 0.06f, 0.9f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.42f, 0.10f, 0.09f, 0.95f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.12f, 0.10f, 1.0f));
+                if (ImGui::SmallButton("Clipped"))
+                    app_.clearClippedIndicator();
+                ImGui::PopStyleColor(4);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Impulse observed a played sample above 0 dBFS. Click to clear.");
+                }
+            }
 
             ImGui::TableNextColumn();
             const std::string bitrate_bar_label = std::format("{} / {:.0f} kbps",
