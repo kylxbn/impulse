@@ -393,6 +393,8 @@ void MainWindow::initSDL() {
     if (!renderer_)
         throw std::runtime_error(std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
 
+    // Keep texture sampling on the smooth path for scaled artwork rendering.
+    (void)SDL_SetDefaultTextureScaleMode(renderer_, SDL_SCALEMODE_LINEAR);
     SDL_SetRenderVSync(renderer_, 1);
 }
 
@@ -2944,6 +2946,8 @@ void MainWindow::syncAlbumArtTexture(const std::shared_ptr<const TrackInfo>& inf
         SDL_DestroyTexture(album_art_texture_);
         album_art_texture_ = nullptr;
     }
+    album_art_tex_w_ = 0;
+    album_art_tex_h_ = 0;
 
     if (!info || info->album_art_rgba.empty()) return;
 
@@ -2955,6 +2959,7 @@ void MainWindow::syncAlbumArtTexture(const std::shared_ptr<const TrackInfo>& inf
 
     if (!album_art_texture_) return;
 
+    (void)SDL_SetTextureScaleMode(album_art_texture_, SDL_SCALEMODE_LINEAR);
     SDL_UpdateTexture(album_art_texture_, nullptr,
                       info->album_art_rgba.data(),
                       info->album_art_width * 4);
