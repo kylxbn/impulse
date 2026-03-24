@@ -11,6 +11,7 @@ include(cmake/CompilerOptions.cmake)
 include(cmake/Dependencies.cmake)
 
 add_subdirectory(third_party/sc68)
+add_subdirectory(third_party/asap)
 add_subdirectory(src)
 
 option(BUILD_TESTS "Build unit tests" ON)

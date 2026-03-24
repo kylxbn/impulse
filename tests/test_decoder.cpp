@@ -3,6 +3,7 @@
 
 #include "audio/Decoder.hpp"
 #include "audio/DecoderProvider.hpp"
+#include "TestSapFixture.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -277,23 +278,27 @@ TEST_CASE("Decoder - sequential opens decode audio safely") {
 
 TEST_CASE("DecoderProvider selects specialized backends before FFmpeg fallback") {
     const MediaSource vgm_source = MediaSource::fromPath("fixture.vgz");
+    const MediaSource sap_source = MediaSource::fromPath("fixture.sap");
     const MediaSource sndh_source = MediaSource::fromPath(kSc68SamplePath);
     const MediaSource mod_source = MediaSource::fromPath("fixture.mod");
     const MediaSource wav_source = MediaSource::fromPath("fixture.wav");
     const MediaSource url_source = MediaSource::fromUrl("https://example.com/live-stream");
 
     CHECK(decoderProviderForSource(vgm_source).name() == "libvgm");
+    CHECK(decoderProviderForSource(sap_source).name() == "ASAP");
     CHECK(decoderProviderForSource(sndh_source).name() == "libsc68");
     CHECK(decoderProviderForSource(mod_source).name() == "libopenmpt");
     CHECK(decoderProviderForSource(wav_source).name() == "FFmpeg");
     CHECK(decoderProviderForSource(url_source).name() == "FFmpeg");
     CHECK(Decoder::supportsGaplessForSource(vgm_source) == true);
+    CHECK(Decoder::supportsGaplessForSource(sap_source) == false);
     CHECK(Decoder::supportsGaplessForSource(sndh_source) == false);
     CHECK(Decoder::supportsGaplessForSource(mod_source) == true);
     CHECK(Decoder::supportsGaplessForSource(wav_source) == true);
     CHECK(Decoder::supportsGaplessForSource(url_source) == false);
 
     CHECK(decoderProviderForSource(vgm_source).capabilitiesForSource(vgm_source).can_seek == true);
+    CHECK(decoderProviderForSource(sap_source).capabilitiesForSource(sap_source).can_seek == true);
     CHECK(decoderProviderForSource(sndh_source).capabilitiesForSource(sndh_source).can_seek == false);
     CHECK(decoderProviderForSource(mod_source).capabilitiesForSource(mod_source).can_seek == true);
     CHECK(decoderProviderForSource(wav_source).capabilitiesForSource(wav_source).can_seek == true);
@@ -301,12 +306,17 @@ TEST_CASE("DecoderProvider selects specialized backends before FFmpeg fallback")
 }
 
 TEST_CASE("Decoder capabilities reflect shared decoder contract") {
+    const MediaSource sap_source = MediaSource::fromPath("fixture.sap");
     const MediaSource sndh_source = MediaSource::fromPath(kSc68SamplePath);
     const MediaSource wav_source = MediaSource::fromPath("fixture.wav");
     const MediaSource url_source = MediaSource::fromUrl("https://example.com/live-stream");
 
     CHECK(Decoder{}.capabilities().can_seek == false);
     CHECK(Decoder{}.capabilities().supports_gapless == false);
+
+    const auto sap_caps = Decoder::capabilitiesForSource(sap_source);
+    CHECK(sap_caps.can_seek == true);
+    CHECK(sap_caps.supports_gapless == false);
 
     const auto sndh_caps = Decoder::capabilitiesForSource(sndh_source);
     CHECK(sndh_caps.can_seek == false);
@@ -342,6 +352,36 @@ TEST_CASE("Decoder - VGM backend decodes minimal VGM audio") {
     CHECK(!pcm.empty());
 }
 
+TEST_CASE("Decoder - ASAP backend decodes SAP audio and duplicates mono output to stereo") {
+    const auto temp_dir = prepareTempRoot("sap_open");
+    const auto sap_track = createMinimalSapFile(temp_dir, "fixture.sap");
+
+    Decoder decoder;
+    std::vector<float> pcm;
+
+    auto open_result = decoder.open(sap_track, 48000);
+    REQUIRE(open_result.ok);
+    CHECK(decoder.trackInfo().decoder_name == "ASAP");
+    CHECK(decoder.trackInfo().seekable == true);
+    CHECK(decoder.trackInfo().sample_rate == 48000);
+    CHECK(decoder.trackInfo().bit_depth == 16);
+    CHECK(decoder.trackInfo().channels == 1);
+    CHECK(decoder.outputFormat().channels == 2);
+    CHECK(decoder.capabilities().can_seek == true);
+    CHECK(decoder.supportsGaplessPreparation() == false);
+    CHECK(decoder.capabilities().supports_gapless == false);
+    CHECK(decoderAnalysisValue(decoder.trackInfo(), "SAP type") ==
+          std::optional<std::string>{"B"});
+    CHECK(decoderAnalysisValue(decoder.trackInfo(), "Output mix") ==
+          std::optional<std::string>{"mono duplicated to stereo"});
+    CHECK(decoder.instantaneousBitrateBps() > 0);
+    CHECK(decoder.totalFrames() > 0);
+    REQUIRE(decoder.decodeNextFrames(pcm) > 0);
+    CHECK(!pcm.empty());
+    CHECK(peakAbsSample(pcm) > 0.0001f);
+    CHECK(decoder.seek(0.5));
+}
+
 TEST_CASE("Decoder - libopenmpt backend decodes minimal MOD audio") {
     const auto temp_dir = prepareTempRoot("openmpt_open");
     const auto mod_track = createMinimalModFile(temp_dir, "fixture.mod");
@@ -365,7 +405,10 @@ TEST_CASE("Decoder - libopenmpt backend decodes minimal MOD audio") {
 }
 
 TEST_CASE("Decoder - libsc68 backend decodes Atari ST SNDH audio with BLEP emulation") {
-    REQUIRE(std::filesystem::exists(kSc68SamplePath));
+    if (!std::filesystem::exists(kSc68SamplePath)) {
+        MESSAGE("Skipping libsc68 decode test because the SNDH fixture is unavailable");
+        return;
+    }
 
     Decoder decoder;
     std::vector<float> pcm;

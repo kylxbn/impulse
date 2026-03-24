@@ -90,6 +90,7 @@ TEST_CASE("FileBrowser recursive collection skips unreadable directories") {
 TEST_CASE("FileBrowser recognises VGM, VGZ, and tracker modules as audio") {
     CHECK(FileBrowser::isAudioFile("track.vgm"));
     CHECK(FileBrowser::isAudioFile("track.vgz"));
+    CHECK(FileBrowser::isAudioFile("track.sap"));
     CHECK(FileBrowser::isAudioFile("track.sc68"));
     CHECK(FileBrowser::isAudioFile("track.sndh"));
     CHECK(FileBrowser::isAudioFile("track.snd"));

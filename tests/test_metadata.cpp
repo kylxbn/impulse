@@ -2,6 +2,7 @@
 #include "doctest.h"
 
 #include "metadata/MetadataReader.hpp"
+#include "TestSapFixture.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -490,6 +491,46 @@ TEST_CASE("MetadataReader - reads VGM and VGZ through libvgm") {
     CHECK(vgz_result->duration_seconds > 0.0);
 }
 
+TEST_CASE("MetadataReader - reads SAP through ASAP") {
+    const auto temp_root = prepareTempRoot("sap_metadata");
+    const auto sap_path = createMinimalSapFile(temp_root, "fixture.sap");
+
+    auto result = MetadataReader::read(sap_path, MetadataReadOptions{.decode_album_art = false});
+    REQUIRE(result.has_value());
+
+    const TrackInfo& info = *result;
+    CHECK(info.decoder_name == "ASAP");
+    CHECK(info.codec_name == "SAP");
+    CHECK(info.container_format == "sap");
+    CHECK(info.seekable == true);
+    CHECK(info.sample_rate == 44100);
+    CHECK(info.bit_depth == 16);
+    CHECK(info.channels == 1);
+    CHECK(info.channel_layout == "mono");
+    CHECK(info.duration_seconds == doctest::Approx(1.0));
+    CHECK(info.bitrate_bps > 0);
+    CHECK(info.track_number == "1");
+    CHECK(info.title == "Tone");
+    CHECK(info.artist == "Impulse Test");
+    CHECK(info.year == "2026");
+    CHECK(decoderAnalysisValue(info, "TV system") ==
+          std::optional<std::string>{"PAL"});
+    CHECK(decoderAnalysisValue(info, "SAP type") ==
+          std::optional<std::string>{"B"});
+    CHECK(decoderAnalysisValue(info, "Channel mode") ==
+          std::optional<std::string>{"mono POKEY"});
+    CHECK(decoderAnalysisValue(info, "Seek support") ==
+          std::optional<std::string>{"enabled via ASAP millisecond seek"});
+    CHECK(decoderAnalysisValue(info, "Gapless preload") ==
+          std::optional<std::string>{"not supported"});
+    CHECK(formatMetadataValue(info, "Subsongs") ==
+          std::optional<std::string>{"1"});
+    CHECK(formatMetadataValue(info, "Default song") ==
+          std::optional<std::string>{"1"});
+    CHECK(decoderAnalysisValue(info, "ASAP version") ==
+          std::optional<std::string>{"8.0.0"});
+}
+
 TEST_CASE("MetadataReader - reads tracker modules through libopenmpt") {
     const auto temp_root = prepareTempRoot("openmpt_metadata");
     const auto mod_path = createMinimalModFile(temp_root, "fixture.mod");
@@ -522,7 +563,10 @@ TEST_CASE("MetadataReader - reads tracker modules through libopenmpt") {
 }
 
 TEST_CASE("MetadataReader - reads Atari ST SNDH through libsc68") {
-    REQUIRE(std::filesystem::exists(kSc68SamplePath));
+    if (!std::filesystem::exists(kSc68SamplePath)) {
+        MESSAGE("Skipping libsc68 metadata test because the SNDH fixture is unavailable");
+        return;
+    }
 
     auto result = MetadataReader::read(kSc68SamplePath, MetadataReadOptions{.decode_album_art = false});
     REQUIRE(result.has_value());

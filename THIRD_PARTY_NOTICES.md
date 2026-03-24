@@ -24,6 +24,15 @@ This project depends on source code from the following third-party components:
   unsupported MFP timer mode.
   Original upstream copyright and license notices are preserved in the vendored
   source files.
+- ASAP (Another Slight Atari Player): GPL-2.0-or-later
+  Copyright (c) 2005-2026 Piotr Fusik
+  Vendored from ASAP source code as a minimal subset for
+  SAP playback support. Vendored files: `asap.c`, `asap.h`, `asap-stdio.c`,
+  `asap-stdio.h`, and `COPYING`. The vendored version is identified in
+  `asap.h` as `8.0.0`.
+  Local integration changes include CMake build glue only.
+  Original upstream copyright and license notices are preserved in the vendored
+  source files.
 
 Impulse also links against system-provided libraries including SDL3, FFmpeg,
 libopenmpt, PipeWire, and systemd/libsystemd. These libraries are not

@@ -23,6 +23,7 @@ set(IMPULSE_METADATA_SOURCES
     ${CMAKE_SOURCE_DIR}/src/metadata/MetadataReader.cpp
     ${CMAKE_SOURCE_DIR}/src/metadata/FFmpegMetadataReader.cpp
     ${CMAKE_SOURCE_DIR}/src/metadata/OpenMptMetadataReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/metadata/SapMetadataReader.cpp
     ${CMAKE_SOURCE_DIR}/src/metadata/Sc68MetadataReader.cpp
     ${CMAKE_SOURCE_DIR}/src/metadata/VgmMetadataReader.cpp)
 
@@ -31,6 +32,7 @@ set(IMPULSE_DECODER_SOURCES
     ${CMAKE_SOURCE_DIR}/src/audio/DecoderProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/FFmpegDecoderBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/OpenMptDecoderBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/SapDecoderBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/Sc68DecoderBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/VgmDecoderBackend.cpp)
 
@@ -97,7 +99,7 @@ add_executable(test_metadata
 target_include_directories(test_metadata PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
-target_link_libraries(test_metadata PRIVATE PkgConfig::LIBAV PkgConfig::LIBOPENMPT vgm-player vgm-emu vgm-utils sc68_lib)
+target_link_libraries(test_metadata PRIVATE PkgConfig::LIBAV PkgConfig::LIBOPENMPT vgm-player vgm-emu vgm-utils asap_lib sc68_lib)
 target_compile_features(test_metadata PRIVATE cxx_std_23)
 target_compile_definitions(test_metadata PRIVATE IMPULSE_TEST_SC68_SAMPLE="${CMAKE_SOURCE_DIR}/Loader_Tune.sndh")
 add_test(NAME test_metadata COMMAND test_metadata)
@@ -121,7 +123,7 @@ add_executable(test_decoder
 target_include_directories(test_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
-target_link_libraries(test_decoder PRIVATE PkgConfig::LIBAV PkgConfig::LIBOPENMPT vgm-player vgm-emu vgm-utils sc68_lib)
+target_link_libraries(test_decoder PRIVATE PkgConfig::LIBAV PkgConfig::LIBOPENMPT vgm-player vgm-emu vgm-utils asap_lib sc68_lib)
 target_compile_features(test_decoder PRIVATE cxx_std_23)
 target_compile_definitions(test_decoder PRIVATE IMPULSE_TEST_SC68_SAMPLE="${CMAKE_SOURCE_DIR}/Loader_Tune.sndh")
 add_test(NAME test_decoder COMMAND test_decoder)

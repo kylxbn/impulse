@@ -10,12 +10,14 @@ add_executable(impulse
     audio/DecoderProvider.cpp
     audio/FFmpegDecoderBackend.cpp
     audio/OpenMptDecoderBackend.cpp
+    audio/SapDecoderBackend.cpp
     audio/Sc68DecoderBackend.cpp
     audio/VgmDecoderBackend.cpp
     audio/AudioOutput.cpp
     metadata/MetadataReader.cpp
     metadata/FFmpegMetadataReader.cpp
     metadata/OpenMptMetadataReader.cpp
+    metadata/SapMetadataReader.cpp
     metadata/Sc68MetadataReader.cpp
     metadata/VgmMetadataReader.cpp
     playlist/PlaylistManager.cpp
@@ -40,6 +42,7 @@ target_link_libraries(impulse PRIVATE
     vgm-player
     vgm-emu
     vgm-utils
+    asap_lib
     sc68_lib
     imgui_sdl3
     readerwriterqueue
