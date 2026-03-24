@@ -2,6 +2,7 @@ add_executable(impulse
     main.cpp
     core/MediaSource.cpp
     core/Lyrics.cpp
+    core/Sc68Support.cpp
     app/Application.cpp
     app/SettingsStorage.cpp
     app/SessionStorage.cpp
@@ -9,11 +10,13 @@ add_executable(impulse
     audio/DecoderProvider.cpp
     audio/FFmpegDecoderBackend.cpp
     audio/OpenMptDecoderBackend.cpp
+    audio/Sc68DecoderBackend.cpp
     audio/VgmDecoderBackend.cpp
     audio/AudioOutput.cpp
     metadata/MetadataReader.cpp
     metadata/FFmpegMetadataReader.cpp
     metadata/OpenMptMetadataReader.cpp
+    metadata/Sc68MetadataReader.cpp
     metadata/VgmMetadataReader.cpp
     playlist/PlaylistManager.cpp
     playlist/PlaylistWorkspace.cpp
@@ -37,6 +40,7 @@ target_link_libraries(impulse PRIVATE
     vgm-player
     vgm-emu
     vgm-utils
+    sc68_lib
     imgui_sdl3
     readerwriterqueue
     pthread

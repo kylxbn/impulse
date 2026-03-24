@@ -33,6 +33,11 @@ bool isVgmExtension(std::string_view extension) {
     return normalized == ".vgm" || normalized == ".vgz";
 }
 
+bool isSc68Extension(std::string_view extension) {
+    const std::string normalized = normalizeExtension(extension);
+    return normalized == ".sc68" || normalized == ".sndh" || normalized == ".snd";
+}
+
 bool isTrackerModuleExtension(std::string_view extension) {
     const std::string normalized = normalizeExtension(extension);
     for (const auto supported : kTrackerModuleExtensions) {
@@ -44,6 +49,8 @@ bool isTrackerModuleExtension(std::string_view extension) {
 
 bool isSupportedAudioExtension(std::string_view extension) {
     if (isVgmExtension(extension))
+        return true;
+    if (isSc68Extension(extension))
         return true;
     if (isTrackerModuleExtension(extension))
         return true;

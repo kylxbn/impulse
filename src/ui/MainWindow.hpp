@@ -209,7 +209,7 @@ private:
 
     struct FrameIdling {
         std::chrono::milliseconds interactive_render_interval{33};
-        std::chrono::milliseconds playback_idle_render_interval{100};
+        std::chrono::milliseconds playback_idle_render_interval{33};
         std::chrono::milliseconds idle_render_interval{250};
         std::chrono::milliseconds minimized_render_interval{500};
         std::chrono::milliseconds interaction_boost_window{250};

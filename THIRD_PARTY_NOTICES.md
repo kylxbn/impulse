@@ -15,6 +15,15 @@ This project depends on source code from the following third-party components:
 - libopenmpt and openmpt123: BSD-3-Clause
   Copyright (c) 2004-2026, OpenMPT Project Developers and Contributors
   Copyright (c) 1997-2003, Olivier Lapicque
+- sc68 / file68 / unice68: GPL-3.0-or-later
+  Copyright (c) 1998-2016 Benjamin Gerard
+  Vendored from `sc68-code-r713` (SourceForge)
+  Local integration changes include CMake build glue, generated `include/sc68/trap68.h`,
+  local config headers required for in-tree builds, and a fail-soft patch in
+  `third_party/sc68/libsc68/io68/mfpemul.c` to avoid aborting Impulse on an
+  unsupported MFP timer mode.
+  Original upstream copyright and license notices are preserved in the vendored
+  source files.
 
 Impulse also links against system-provided libraries including SDL3, FFmpeg,
 libopenmpt, PipeWire, and systemd/libsystemd. These libraries are not
