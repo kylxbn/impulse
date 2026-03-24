@@ -15,6 +15,8 @@
 
 namespace {
 
+const std::filesystem::path kSc68SamplePath = IMPULSE_TEST_SC68_SAMPLE;
+
 const std::filesystem::path kTempRoot =
     std::filesystem::temp_directory_path() / "impulse_test_metadata_reader";
 
@@ -517,6 +519,35 @@ TEST_CASE("MetadataReader - reads tracker modules through libopenmpt") {
           std::optional<std::string>{"mod"});
     CHECK(formatMetadataValue(info, "Tracker") ==
           std::optional<std::string>{"Generic ProTracker or compatible"});
+}
+
+TEST_CASE("MetadataReader - reads Atari ST SNDH through libsc68") {
+    REQUIRE(std::filesystem::exists(kSc68SamplePath));
+
+    auto result = MetadataReader::read(kSc68SamplePath, MetadataReadOptions{.decode_album_art = false});
+    REQUIRE(result.has_value());
+
+    const TrackInfo& info = *result;
+    CHECK(info.decoder_name == "libsc68");
+    CHECK(info.container_format == "sndh");
+    CHECK(info.seekable == false);
+    CHECK(info.sample_rate == 48000);
+    CHECK(info.bit_depth == 16);
+    CHECK(info.channels == 2);
+    CHECK(info.channel_layout == "stereo");
+    CHECK(info.duration_seconds > 0.0);
+    CHECK(info.bitrate_bps > 0);
+    CHECK(info.track_number == "1");
+    CHECK(decoderAnalysisValue(info, "YM engine") ==
+          std::optional<std::string>{"blep"});
+    CHECK(decoderAnalysisValue(info, "PCM format") ==
+          std::optional<std::string>{"s16"});
+    CHECK(decoderAnalysisValue(info, "Paula interpolation") ==
+          std::optional<std::string>{"disabled"});
+    CHECK(decoderAnalysisValue(info, "Seek support") ==
+          std::optional<std::string>{"disabled"});
+    CHECK(decoderAnalysisValue(info, "Gapless preload") ==
+          std::optional<std::string>{"not supported"});
 }
 
 TEST_CASE("MetadataReader - reads GD3 tags and chip analysis from VGM") {
