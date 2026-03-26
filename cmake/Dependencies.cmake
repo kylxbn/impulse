@@ -33,7 +33,7 @@ FetchContent_Declare(readerwriterqueue
 
 FetchContent_Declare(libvgm
     GIT_REPOSITORY https://github.com/ValleyBell/libvgm.git
-    GIT_TAG        a16858c4b92e297eaf9ddd602ecb790a5b980b69
+    GIT_TAG        9f376fbca88db3e9fd169a8b145b7d6932a020a9
     GIT_SHALLOW    TRUE)
 
 FetchContent_GetProperties(imgui)
