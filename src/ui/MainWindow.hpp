@@ -280,6 +280,7 @@ private:
     std::shared_ptr<const TrackInfo> bitrate_peak_track_;
     bool pending_end_of_track_advance_ = false;
     std::optional<PlaybackTrackInstance> pending_end_of_track_track_;
+    std::optional<uint64_t> pending_end_of_track_target_item_id_;
     bool pending_error_advance_ = false;
     std::optional<int64_t> pending_mpris_seek_target_us_;
     std::string            pending_mpris_seek_track_id_;

@@ -174,6 +174,23 @@ TEST_CASE("Playback advance still marks end-of-track handled at the end of the p
     CHECK_FALSE(advance.next_index.has_value());
 }
 
+TEST_CASE("Playback advance target stays terminal when the playlist grows after EOF") {
+    PlaylistManager playlist;
+    playlist.addTrack("/music/a.flac");
+    playlist.addTrack("/music/b.flac");
+
+    REQUIRE(playlist.setCurrentIndex(1));
+
+    const auto target_item_id =
+        playbackAdvanceItemId(playlist, playlist.tracks()[1].id, RepeatMode::Off);
+
+    CHECK_FALSE(target_item_id.has_value());
+
+    playlist.addTrack("/music/c.flac");
+
+    CHECK_FALSE(playbackIndexForItemId(playlist, target_item_id).has_value());
+}
+
 TEST_CASE("PlaylistWorkspace keeps at least one playlist and switches the active tab") {
     PlaylistWorkspace workspace;
 

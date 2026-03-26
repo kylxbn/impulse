@@ -55,3 +55,22 @@ inline std::optional<size_t> playbackAdvanceIndex(const PlaylistManager& playlis
                                                   RepeatMode repeat_mode) {
     return playbackAdvanceDecision(playlist, audible_playlist_item_id, repeat_mode).next_index;
 }
+
+inline std::optional<uint64_t> playbackAdvanceItemId(const PlaylistManager& playlist,
+                                                     uint64_t audible_playlist_item_id,
+                                                     RepeatMode repeat_mode) {
+    const auto next_index =
+        playbackAdvanceIndex(playlist, audible_playlist_item_id, repeat_mode);
+    if (!next_index)
+        return std::nullopt;
+
+    return playlist.tracks()[*next_index].id;
+}
+
+inline std::optional<size_t> playbackIndexForItemId(const PlaylistManager& playlist,
+                                                    std::optional<uint64_t> playlist_item_id) {
+    if (!playlist_item_id)
+        return std::nullopt;
+
+    return playlist.indexOf(*playlist_item_id);
+}
