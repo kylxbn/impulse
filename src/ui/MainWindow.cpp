@@ -576,7 +576,8 @@ bool MainWindow::runFrame() {
                  playlist &&
                  (app_.playbackStatus() == PlaybackStatus::EndOfTrack ||
                   app_.playbackStatus() == PlaybackStatus::Stopped)) {
-            const auto next_index = playbackAdvanceIndex(*playlist);
+            const auto next_index =
+                playbackIndexForItemId(playlist->playlist, pending_end_of_track_target_item_id_);
             if (next_index) {
                 const PlaylistItem& next = playlist->playlist.tracks()[*next_index];
                 const bool can_gapless = frame_now_playing_ &&
@@ -2915,6 +2916,7 @@ void MainWindow::notifyPlaylistStructureChanged(uint64_t playlist_id) {
 void MainWindow::clearPendingEndOfTrackAdvance() {
     pending_end_of_track_advance_ = false;
     pending_end_of_track_track_.reset();
+    pending_end_of_track_target_item_id_.reset();
 }
 
 void MainWindow::syncPendingEndOfTrackAdvanceWithNowPlaying() {
@@ -3303,6 +3305,8 @@ void MainWindow::scheduleGaplessAdvanceTrack() {
 
     pending_end_of_track_advance_ = true;
     pending_end_of_track_track_ = playbackTrackInstance(frame_now_playing_);
+    pending_end_of_track_target_item_id_ =
+        playbackAdvanceItemId(playlist->playlist, audible_playlist_item_id, settings_.repeat_mode);
     if (!advance.next_index)
         return;
 
