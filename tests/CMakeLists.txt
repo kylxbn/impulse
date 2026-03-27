@@ -86,7 +86,7 @@ add_executable(test_file_browser
 target_include_directories(test_file_browser PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
-target_link_libraries(test_file_browser PRIVATE readerwriterqueue)
+target_link_libraries(test_file_browser PRIVATE readerwriterqueue PkgConfig::LIBAV)
 target_compile_features(test_file_browser PRIVATE cxx_std_23)
 add_test(NAME test_file_browser COMMAND test_file_browser)
 
@@ -158,6 +158,6 @@ add_executable(test_mpris_model
 target_include_directories(test_mpris_model PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${doctest_SOURCE_DIR}/doctest)
-target_link_libraries(test_mpris_model PRIVATE readerwriterqueue)
+target_link_libraries(test_mpris_model PRIVATE readerwriterqueue PkgConfig::LIBAV)
 target_compile_features(test_mpris_model PRIVATE cxx_std_23)
 add_test(NAME test_mpris_model COMMAND test_mpris_model)
