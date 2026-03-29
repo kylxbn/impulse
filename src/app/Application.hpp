@@ -3,7 +3,6 @@
 #include "audio/AudioOutput.hpp"
 #include "audio/BitrateSpanQueue.hpp"
 #include "audio/Decoder.hpp"
-#include "audio/PeakSpanQueue.hpp"
 #include "audio/RingBuffer.hpp"
 #include "app/GaplessPendingRequest.hpp"
 #include "app/GaplessTrackQueue.hpp"
@@ -128,7 +127,6 @@ private:
     // --- Audio pipeline ---
     AudioOutput::Ring audio_ring_;
     AudioOutput::BitrateRing bitrate_ring_;
-    AudioOutput::PeakRing peak_ring_;
     AudioOutput       audio_output_;
     Decoder           decoder_;
 

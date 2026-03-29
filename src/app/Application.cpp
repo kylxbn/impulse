@@ -4,8 +4,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cmath>
-#include <limits>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -19,27 +17,6 @@ constexpr float kGaplessPrepareTargetSeconds = 1.0f;
 constexpr int kMaxLiveStreamReconnectAttempts = 3;
 constexpr auto kCommandRetryDelay = 1ms;
 constexpr auto kLiveStreamReconnectDelay = 500ms;
-
-struct PeakTelemetry {
-    float peak_abs = 0.0f;
-    bool  clipped = false;
-};
-
-PeakTelemetry analyzePeakTelemetry(const float* samples, size_t sample_count) {
-    PeakTelemetry telemetry{};
-    for (size_t i = 0; i < sample_count; ++i) {
-        const float magnitude = std::abs(samples[i]);
-        if (!std::isfinite(magnitude)) {
-            telemetry.peak_abs = std::numeric_limits<float>::infinity();
-            telemetry.clipped = true;
-            return telemetry;
-        }
-        telemetry.peak_abs = std::max(telemetry.peak_abs, magnitude);
-    }
-
-    telemetry.clipped = telemetry.peak_abs > 1.0f;
-    return telemetry;
-}
 
 }  // namespace
 
@@ -88,7 +65,6 @@ int Application::run() {
     // Start audio output
     if (!audio_output_.init(audio_ring_,
                             bitrate_ring_,
-                            peak_ring_,
                             playback_state_.current_frame,
                             playback_state_.seek_generation,
                             playback_state_.current_bitrate_bps,
@@ -254,7 +230,7 @@ void Application::decodeLoop(std::stop_token stop) {
                 current_status != PlaybackStatus::Buffering)
                 break;
 
-            if (!bitrate_ring_.canPush() || !peak_ring_.canPush()) {
+            if (!bitrate_ring_.canPush()) {
                 waitForDecodeLoopSignal(stop,
                                         decode_wakeup_generation_.load(std::memory_order_acquire));
                 continue;
@@ -276,16 +252,9 @@ void Application::decodeLoop(std::stop_token stop) {
             }
 
             const size_t written_samples = static_cast<size_t>(frames_written) * channels;
-            const PeakTelemetry peak_telemetry =
-                analyzePeakTelemetry(pending_pcm.data() + pending_samples, written_samples);
             const bool queued_bitrate =
                 bitrate_ring_.push(frames_written, pending_bitrate_bps);
-            const bool queued_peak =
-                peak_ring_.push(frames_written,
-                                peak_telemetry.peak_abs,
-                                peak_telemetry.clipped);
             (void) queued_bitrate;
-            (void) queued_peak;
             pending_samples += written_samples;
         }
 
@@ -332,7 +301,6 @@ void Application::discardBufferedAudio(int64_t target_frame) {
 
     audio_ring_.reset();
     bitrate_ring_.reset();
-    peak_ring_.reset();
     clearPendingGaplessState();
     clearGaplessTrackSwitches();
     playback_state_.decoder_reached_eof.store(false, std::memory_order_relaxed);
