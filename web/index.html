@@ -1,17 +1,228 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/impulse.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Impulse is a Linux-native desktop music player built with C++23, ImGui, SDL3, PipeWire, and FFmpeg."
-    />
-    <title>Impulse | Linux-native music player</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="icon" href="./favicon.svg" />
+    <title>Impulse — A music player for technical people</title>
+    <script type="module" src="./src/main.js"></script>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div class="min-h-screen bg-white text-black">
+
+      <!-- HEADER -->
+      <header class="sticky top-0 z-50 bg-white border-b-2 border-black">
+        <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+          <a href="./" class="font-mono font-black text-xl tracking-tight">IMPULSE</a>
+          <div class="flex items-center gap-3">
+            <div class="flex font-mono text-sm">
+              <button data-lang-btn="en" class="px-3 py-1 border border-black cursor-pointer bg-black text-white">EN</button>
+              <button data-lang-btn="ja" class="px-3 py-1 border border-black border-l-0 cursor-pointer bg-white text-black hover:bg-gray-100">JA</button>
+            </div>
+            <a
+              href="https://github.com/kylxbn/impulse"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="font-mono text-sm px-3 py-1 border border-black hover:bg-black hover:text-white transition-colors duration-150"
+            ><span data-i18n="nav_github">GitHub</span> ↗</a>
+          </div>
+        </div>
+      </header>
+
+      <main>
+
+        <!-- HERO -->
+        <section class="border-b-2 border-black">
+          <div class="max-w-5xl mx-auto px-6 pt-16 pb-12">
+            <h1 class="font-mono font-black text-7xl sm:text-9xl tracking-tight leading-none mb-8">IMPULSE</h1>
+            <p class="text-2xl sm:text-3xl leading-snug mb-3 max-w-2xl" data-i18n="hero_tagline">A music player for technical people.</p>
+            <p class="font-mono text-sm text-gray-500 mb-10" data-i18n="hero_specs">48 kHz · float32 ring buffer · PipeWire direct output</p>
+            <a
+              href="https://github.com/kylxbn/impulse"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-block font-mono bg-black text-white px-6 py-3 text-sm hover:bg-neutral-800 transition-colors duration-150"
+            ><span data-i18n="hero_cta">View on GitHub</span> ↗</a>
+          </div>
+          <div class="max-w-5xl mx-auto px-6 pb-0">
+            <img
+              id="img-screenshot"
+              data-i18n-alt="hero_alt_screenshot"
+              alt="Impulse music player main window"
+              class="w-full border-t border-x-2 border-black block"
+              width="1200"
+              height="698"
+            />
+          </div>
+        </section>
+
+        <!-- FORMAT SUPPORT -->
+        <section class="border-b-2 border-black">
+          <div class="max-w-5xl mx-auto px-6 py-16">
+            <p class="font-mono text-xs tracking-widest text-gray-400 mb-4 uppercase" data-i18n="feat_formats_label">FORMAT SUPPORT</p>
+            <h2 class="font-mono font-black text-5xl mb-8 leading-tight" data-i18n="feat_formats_title">Wide Format Support</h2>
+            <img
+              id="img-wide-format"
+              data-i18n-alt="feat_formats_alt"
+              alt="File format support list"
+              class="w-full border border-black mb-6"
+              width="869"
+              height="431"
+            />
+            <p class="text-base leading-relaxed max-w-3xl text-neutral-700" data-i18n="feat_formats_desc">Decoded via FFmpeg (MP3, FLAC, OPUS, WMA, APE, DSD, DTS, TrueHD, Dolby AC-4, and more), OpenMPT with no interpolation and no surround effects (XM, MOD, IT, S3M, MED, OKT, UMX, MTM, and more), libvgm (VGM/VGZ), and sc68 (Atari ST). If the backend can read it, Impulse will play it.</p>
+          </div>
+        </section>
+
+        <!-- TECHNICAL INSPECTOR -->
+        <section class="border-b-2 border-black">
+          <div class="max-w-5xl mx-auto px-6 py-16">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+              <div class="flex justify-start">
+                <img
+                  id="img-inspector"
+                  data-i18n-alt="feat_inspector_alt"
+                  alt="Technical information inspector window"
+                  class="border border-black"
+                  style="max-width: 341px; width: 100%;"
+                  width="341"
+                  height="547"
+                />
+              </div>
+              <div>
+                <p class="font-mono text-xs tracking-widest text-gray-400 mb-4 uppercase" data-i18n="feat_inspector_label">TECHNICAL INSPECTION</p>
+                <h2 class="font-mono font-black text-5xl mb-6 leading-tight" data-i18n="feat_inspector_title">Per-track Technical Info</h2>
+                <p class="text-base leading-relaxed text-neutral-700" data-i18n="feat_inspector_desc">Codec, sample rate, bitrate, channel layout, ReplayGain track/album gain and peak, and Peak Loudness Range (PLR) are shown per track in the inspector window. Metadata is read via FFmpeg.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- GAPLESS + PEAK -->
+        <section class="border-b-2 border-black">
+          <div class="max-w-5xl mx-auto px-6 py-16">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+              <div>
+                <p class="font-mono text-xs tracking-widest text-gray-400 mb-4 uppercase" data-i18n="feat_gapless_label">GAPLESS PLAYBACK</p>
+                <h2 class="font-mono font-black text-5xl mb-6 leading-tight" data-i18n="feat_gapless_title">True Gapless</h2>
+                <p class="text-base leading-relaxed text-neutral-700" data-i18n="feat_gapless_desc">Tracks are pre-decoded into a shared float32 ring buffer (2M samples — approximately 21.8 seconds at 48 kHz stereo) before the current track ends. Gapless is best-effort and depends on FFmpeg decode accuracy.</p>
+              </div>
+              <div>
+                <p class="font-mono text-xs tracking-widest text-gray-400 mb-4 uppercase" data-i18n="feat_peak_label">REAL-TIME BUFFER VISUALIZATION</p>
+                <h2 class="font-mono font-black text-4xl mb-6 leading-tight" data-i18n="feat_peak_title">Ring Buffer &amp; Bitrate</h2>
+                <img
+                  id="img-peak"
+                  data-i18n-alt="feat_peak_alt"
+                  alt="Ring buffer and peak bitrate visualization strip"
+                  class="w-full border border-black mb-6"
+                  width="394"
+                  height="91"
+                />
+                <p class="text-base leading-relaxed text-neutral-700" data-i18n="feat_peak_desc">The inspector displays the current fill state of the ring buffer alongside the instantaneous and peak bitrate. A persistent clipping indicator is shown when the audio signal exceeds 0 dBFS.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MULTIPLE PLAYLISTS -->
+        <section class="border-b-2 border-black">
+          <div class="max-w-5xl mx-auto px-6 py-16">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
+              <div>
+                <p class="font-mono text-xs tracking-widest text-gray-400 mb-4 uppercase" data-i18n="feat_playlists_label">PLAYLIST MANAGEMENT</p>
+                <h2 class="font-mono font-black text-5xl mb-6 leading-tight" data-i18n="feat_playlists_title">Multiple Playlist Tabs</h2>
+                <p class="text-base leading-relaxed text-neutral-700" data-i18n="feat_playlists_desc">Multiple named playlists in dockable tabs. Tracks can be sorted by order, track number, album, title, artist, duration, codec, bitrate, ReplayGain, PLR, filename, or path. Saved and loaded as M3U8.</p>
+              </div>
+              <div class="flex items-center">
+                <img
+                  id="img-playlists"
+                  data-i18n-alt="feat_playlists_alt"
+                  alt="Multiple playlist tabs view"
+                  class="w-full border border-black"
+                  width="493"
+                  height="256"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- FILE BROWSER + SETTINGS -->
+        <section class="border-b-2 border-black">
+          <div class="max-w-5xl mx-auto px-6 py-16">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div class="border border-black p-6">
+                <img
+                  id="img-browser"
+                  data-i18n-alt="feat_browser_alt"
+                  alt="File browser panel"
+                  class="w-full border border-black mb-6"
+                  width="402"
+                  height="352"
+                />
+                <p class="font-mono text-xs tracking-widest text-gray-400 mb-3 uppercase" data-i18n="feat_browser_label">FILE BROWSER</p>
+                <h3 class="font-mono font-black text-3xl mb-4" data-i18n="feat_browser_title">Filesystem Browser</h3>
+                <p class="text-base leading-relaxed text-neutral-700" data-i18n="feat_browser_desc">Browse the local filesystem from a dockable panel. No library database, no scanning step. Directories and files are listed and added directly to the active playlist.</p>
+              </div>
+              <div class="border border-black p-6">
+                <img
+                  id="img-settings"
+                  data-i18n-alt="feat_settings_alt"
+                  alt="Settings window"
+                  class="w-full border border-black mb-6"
+                  width="486"
+                  height="402"
+                />
+                <p class="font-mono text-xs tracking-widest text-gray-400 mb-3 uppercase" data-i18n="feat_settings_label">SETTINGS</p>
+                <h3 class="font-mono font-black text-3xl mb-4" data-i18n="feat_settings_title">Settings</h3>
+                <p class="text-base leading-relaxed text-neutral-700" data-i18n="feat_settings_desc">Configure ReplayGain mode (none, track, album) and reference LUFS, repeat behavior, and the PipeWire audio output. Settings and playlist state are persisted across sessions.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MPRIS -->
+        <section class="border-b-2 border-black">
+          <div class="max-w-5xl mx-auto px-6 py-16">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+              <div>
+                <p class="font-mono text-xs tracking-widest text-gray-400 mb-4 uppercase" data-i18n="mpris_label">DESKTOP INTEGRATION</p>
+                <h2 class="font-mono font-black text-5xl mb-6 leading-tight" data-i18n="mpris_title">MPRIS Support</h2>
+                <p class="text-base leading-relaxed text-neutral-700" data-i18n="mpris_desc">Full MPRIS2 implementation via D-Bus for integration with KDE, GNOME, and other desktop environments that support the Media Player Remote Interfacing Specification.</p>
+              </div>
+              <div class="flex justify-start">
+                <img
+                  id="img-mpris"
+                  data-i18n-alt="mpris_alt"
+                  alt="MPRIS desktop integration in action"
+                  class="border border-black"
+                  style="max-width: 482px; width: 100%;"
+                  width="482"
+                  height="472"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- FOOTER -->
+      <footer class="bg-black text-white">
+        <div class="max-w-5xl mx-auto px-6 py-16 flex flex-col items-center text-center gap-6">
+          <span class="font-mono font-black text-5xl tracking-tight">IMPULSE</span>
+          <p class="font-mono text-sm text-neutral-400" data-i18n="footer_line">Linux · PipeWire · C++23 · GPL-3.0-only · v1.4.1</p>
+          <a
+            href="https://github.com/kylxbn/impulse"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="font-mono text-sm border border-white px-8 py-3 hover:bg-white hover:text-black transition-colors duration-150"
+          ><span data-i18n="footer_github">View on GitHub</span> ↗</a>
+        </div>
+      </footer>
+
+    </div>
   </body>
 </html>

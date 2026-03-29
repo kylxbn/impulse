@@ -1,56 +1,6 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-:root {
-  color-scheme: light;
-  --paper: #f2eee3;
-  --panel: rgba(255, 255, 255, 0.42);
-  --panel-strong: rgba(255, 255, 255, 0.62);
-  --ink: #111111;
-  --soft: #2f302d;
-  --muted: #6b695f;
-  --line: rgba(17, 17, 17, 0.16);
-  --line-strong: rgba(17, 17, 17, 0.34);
-  --signal: #8e4228;
-  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
-  background: var(--paper);
-  color: var(--ink);
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  min-width: 320px;
-  margin: 0;
-  background:
-    linear-gradient(to right, rgba(17, 17, 17, 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(17, 17, 17, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, #f4f1e8 0%, #ece7da 100%);
-  background-size: 36px 36px, 36px 36px, auto;
-  color: var(--ink);
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at top right, rgba(142, 66, 40, 0.12), transparent 30%),
-    radial-gradient(circle at bottom left, rgba(17, 17, 17, 0.06), transparent 28%);
-}
-
-img {
-  display: block;
-  max-width: 100%;
-}
-
-::selection {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-#app {
-  min-height: 100vh;
+@theme {
+  --font-sans: "IBM Plex Sans JP", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
 }
