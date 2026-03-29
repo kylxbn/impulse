@@ -13,11 +13,21 @@ std::string normalizeExtension(std::string_view extension) {
     return normalized;
 }
 
-constexpr std::array<std::string_view, 17> kSupportedAudioExtensions = {
-    ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac",
-    ".wav", ".aiff", ".ape", ".wv", ".mpc", ".tta",
-    ".wma", ".dsf", ".dff", ".tak", ".vgm",
-};
+// Keep this list focused on audio-oriented extensions that FFmpeg handles well.
+// Specialized formats with dedicated backends stay in their own helpers below.
+constexpr auto kSupportedAudioExtensions = std::to_array<std::string_view>({
+    ".aa",    ".aac",   ".aax",   ".ac3",   ".ac4",   ".adx",   ".aea",
+    ".afc",   ".aif",   ".aifc",  ".aiff",  ".aix",   ".alp",   ".amr",
+    ".amrnb", ".amrwb", ".ape",   ".apm",   ".aptx",  ".ast",   ".au",
+    ".avr",   ".bfstm", ".binka", ".bonk",  ".brstm", ".c2",    ".caf",
+    ".dfpwm", ".dff",   ".dsf",   ".dss",   ".dts",   ".dtshd", ".eac3",
+    ".epaf",  ".flac",  ".fsb",   ".g722",  ".g723",  ".g726",  ".g726le",
+    ".g729",  ".genh",  ".gsm",   ".hca",   ".hcom",  ".iamf",  ".ircam",
+    ".kvag",  ".lc3",   ".loas",  ".m4a",   ".m4b",   ".m4r",   ".mca",
+    ".mka",   ".mlp",   ".mmf",   ".mp1",   ".mp2",   ".mp3",   ".mpc",
+    ".oga",   ".ogg",   ".oma",   ".opus",  ".pvf",   ".qcp",   ".qoa",
+    ".spx",   ".tak",   ".tta",   ".voc",   ".wav",   ".wma",   ".wv",
+});
 
 constexpr std::array<std::string_view, 22> kTrackerModuleExtensions = {
     ".mod", ".xm",  ".it",  ".s3m", ".mptm", ".mtm",

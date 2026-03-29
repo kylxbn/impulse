@@ -2,6 +2,10 @@
 
 #include "core/SupportedFormats.hpp"
 
+extern "C" {
+#include <libavformat/avformat.h>
+}
+
 #include <algorithm>
 #include <optional>
 #include <system_error>
@@ -14,6 +18,56 @@ std::optional<std::filesystem::path> canonicalDirectory(const std::filesystem::p
     if (ec || canonical_path.empty() || !std::filesystem::is_directory(canonical_path, ec))
         return std::nullopt;
     return canonical_path;
+}
+
+bool hasOnlyAudioLikeStreams(const AVFormatContext* format_context) {
+    if (!format_context)
+        return false;
+
+    bool has_audio_stream = false;
+    for (unsigned int i = 0; i < format_context->nb_streams; ++i) {
+        const AVStream* stream = format_context->streams[i];
+        if (!stream || !stream->codecpar)
+            continue;
+
+        switch (stream->codecpar->codec_type) {
+            case AVMEDIA_TYPE_AUDIO:
+                has_audio_stream = true;
+                break;
+            case AVMEDIA_TYPE_VIDEO:
+                if ((stream->disposition & AV_DISPOSITION_ATTACHED_PIC) == 0)
+                    return false;
+                break;
+            default:
+                break;
+        }
+    }
+
+    return has_audio_stream;
+}
+
+bool isFfmpegRecognisedAudioFile(const std::filesystem::path& path) {
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(path, ec))
+        return false;
+
+    AVFormatContext* format_context = nullptr;
+    const std::string path_string = path.string();
+    if (avformat_open_input(&format_context, path_string.c_str(), nullptr, nullptr) < 0)
+        return false;
+
+    const auto close_input = [&] {
+        avformat_close_input(&format_context);
+    };
+
+    if (avformat_find_stream_info(format_context, nullptr) < 0) {
+        close_input();
+        return false;
+    }
+
+    const bool supported = hasOnlyAudioLikeStreams(format_context);
+    close_input();
+    return supported;
 }
 
 }  // namespace
@@ -59,7 +113,10 @@ void FileBrowser::refreshCurrent() {
 }
 
 bool FileBrowser::isAudioFile(const std::filesystem::path& p) {
-    return isSupportedAudioFilePath(p);
+    if (isSupportedAudioFilePath(p))
+        return true;
+
+    return isFfmpegRecognisedAudioFile(p);
 }
 
 std::vector<std::filesystem::path> FileBrowser::collectAudioFiles(const std::filesystem::path& dir,
