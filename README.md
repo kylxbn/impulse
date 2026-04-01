@@ -20,27 +20,37 @@ So yeah. The fastest way to do this is create a new player.
 
 ## Dependencies
 
-Static dependencies:
+The lists below describe native builds from source.
+
+If you are using the Flatpak build, these libraries are provided by the Flatpak runtime and bundled modules from the Flatpak build, so you do not need to install them as host distro packages just to run the app.
+
+Bundled third-party code:
 
 - [ImGui (docking)](https://github.com/ocornut/imgui)
 - [readerwriterqueue](https://github.com/cameron314/readerwriterqueue)
+- [libvgm](https://github.com/ValleyBell/libvgm) (for VGM / VGZ playback)
+- `ASAP` (vendored in `third_party/asap`, for SAP playback)
+- `libsc68` (vendored in `third_party/sc68`, for SC68 / SNDH playback)
 
-Runtime dependencies:
+System libraries required for native builds:
 
-- `libvgm` (for VGM file playback)
 - `libopenmpt` (for tracker / module playback)
-- `ffmpeg` (fallback decoder)
-- `pipewire` (for audio output. Sorry, no other option.)
-- `sdl3` (for Wayland support and GUI)
+- `ffmpeg` (`libavformat`, `libavcodec`, `libavutil`, `libswresample`, `libswscale`) for fallback decoding and metadata
+- `pipewire` (`libpipewire-0.3`) for audio output. Sorry, no other option.
+- `sdl3` for the GUI and desktop integration
 - `libsystemd` (for MPRIS)
+- `zlib` (required by the vendored `libsc68` backend)
 
-Build dependencies:
+Build tools:
 
-- a C++23 toolchain
+- a C and C++ toolchain with C++23 support
 - `cmake`
-- `git`
-- `ninja`
+- `git` (used by CMake `FetchContent` for bundled dependencies)
 - `pkg-config`
+
+Test-only dependency:
+
+- [doctest](https://github.com/doctest/doctest) (fetched automatically when `BUILD_TESTS=ON`)
 
 Flatpak packaging tools:
 
