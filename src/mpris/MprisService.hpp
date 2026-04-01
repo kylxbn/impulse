@@ -2,17 +2,14 @@
 
 #include "mpris/MprisModel.hpp"
 
+#include <systemd/sd-bus.h>
+
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
-
-struct sd_bus;
-struct sd_bus_error;
-struct sd_bus_message;
-struct sd_bus_slot;
 
 class MprisService {
 public:

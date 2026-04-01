@@ -33,6 +33,10 @@ This project depends on source code from the following third-party components:
   Local integration changes include CMake build glue only.
   Original upstream copyright and license notices are preserved in the vendored
   source files.
+- Noto Sans CJK JP Regular: SIL Open Font License 1.1
+  Copyright (c) 2014-2021 Adobe and Google
+  Bundled as the default UI font for reliable CJK glyph coverage across
+  sandboxed and non-sandboxed installs.
 
 Impulse also links against system-provided libraries including SDL3, FFmpeg,
 libopenmpt, PipeWire, and systemd/libsystemd. These libraries are not

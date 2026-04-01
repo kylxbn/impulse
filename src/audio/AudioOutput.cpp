@@ -61,6 +61,7 @@ bool AudioOutput::init(Ring&                 ring,
                        std::atomic<int>&     seek_generation,
                        std::atomic<int64_t>& current_bitrate_bps,
                        std::atomic<float>&   current_peak_abs,
+                       std::atomic<float>&   current_rms_abs,
                        std::atomic<bool>&    clipped_detected,
                        std::atomic<float>&   stream_volume,
                        WakeCallback          wake_callback,
@@ -71,6 +72,7 @@ bool AudioOutput::init(Ring&                 ring,
     seek_gen_             = &seek_generation;
     current_bitrate_bps_  = &current_bitrate_bps;
     current_peak_abs_     = &current_peak_abs;
+    current_rms_abs_      = &current_rms_abs;
     clipped_detected_     = &clipped_detected;
     observed_volume_      = &stream_volume;
     wake_callback_        = wake_callback;
@@ -304,6 +306,7 @@ void AudioOutput::onProcess(void* userdata) {
         self->observed_seek_gen_.notify_all();
         self->current_bitrate_bps_->store(0, std::memory_order_relaxed);
         self->current_peak_abs_->store(0.0f, std::memory_order_relaxed);
+        self->current_rms_abs_->store(0.0f, std::memory_order_relaxed);
         self->peak_meter_accumulator_.reset();
         self->underrun_detected_.store(false, std::memory_order_relaxed);
         std::memset(dst, 0, n_frames * self->config_.channels * sizeof(float));
@@ -318,6 +321,7 @@ void AudioOutput::onProcess(void* userdata) {
     if (self->paused_.load(std::memory_order_relaxed)) {
         self->current_bitrate_bps_->store(0, std::memory_order_relaxed);
         self->current_peak_abs_->store(0.0f, std::memory_order_relaxed);
+        self->current_rms_abs_->store(0.0f, std::memory_order_relaxed);
         self->peak_meter_accumulator_.reset();
         self->underrun_detected_.store(false, std::memory_order_relaxed);
         std::memset(dst, 0, n_frames * self->config_.channels * sizeof(float));
@@ -349,6 +353,7 @@ void AudioOutput::onProcess(void* userdata) {
         if (const auto completed_window =
                 self->peak_meter_accumulator_.consume(dst, got_frames, self->config_.channels)) {
             self->current_peak_abs_->store(completed_window->peak_abs, std::memory_order_relaxed);
+            self->current_rms_abs_->store(completed_window->rms_abs, std::memory_order_relaxed);
             if (completed_window->clipped)
                 self->clipped_detected_->store(true, std::memory_order_relaxed);
         }
@@ -357,10 +362,12 @@ void AudioOutput::onProcess(void* userdata) {
     if (got_frames < n_frames) {
         if (const auto partial_window = self->peak_meter_accumulator_.flush()) {
             self->current_peak_abs_->store(partial_window->peak_abs, std::memory_order_relaxed);
+            self->current_rms_abs_->store(partial_window->rms_abs, std::memory_order_relaxed);
             if (partial_window->clipped)
                 self->clipped_detected_->store(true, std::memory_order_relaxed);
         } else if (got_frames == 0) {
             self->current_peak_abs_->store(0.0f, std::memory_order_relaxed);
+            self->current_rms_abs_->store(0.0f, std::memory_order_relaxed);
         }
     }
 

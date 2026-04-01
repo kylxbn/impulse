@@ -35,7 +35,7 @@
 namespace {
 
 constexpr ImGuiID kBrowserSortName = 1;
-constexpr std::string_view kUiFontPath = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc";
+constexpr std::string_view kBundledUiFontRelativePath = "fonts/NotoSansCJKjp-Regular.otf";
 constexpr ImU32 kUiFontFaceIndex = 0; // Noto Sans CJK JP
 constexpr float kUiFontSize = 18.0f;
 constexpr float kMinVolumeDb = -60.0f;
@@ -163,23 +163,49 @@ constexpr SDL_DialogFileFilter kPlaylistDialogFilters[] = {
     {"M3U8 playlist", "m3u8;m3u"},
 };
 
-bool loadUiFont(ImGuiIO& io) {
-    if (!std::filesystem::exists(kUiFontPath))
-        return false;
+std::vector<std::filesystem::path> uiFontCandidates() {
+    std::vector<std::filesystem::path> candidates;
+    candidates.reserve(5);
 
-    ImFontConfig font_cfg{};
-    font_cfg.FontNo = kUiFontFaceIndex;
-    font_cfg.PixelSnapH = true;
+#ifdef IMPULSE_APP_SHARE_DIR
+    candidates.emplace_back(std::filesystem::path(IMPULSE_APP_SHARE_DIR) / kBundledUiFontRelativePath);
+#endif
+#ifdef IMPULSE_SOURCE_DIR
+    candidates.emplace_back(std::filesystem::path(IMPULSE_SOURCE_DIR) / "packaging" / kBundledUiFontRelativePath);
+#endif
 
-    ImFont* font = io.Fonts->AddFontFromFileTTF(kUiFontPath.data(),
-                                                kUiFontSize,
-                                                &font_cfg,
-                                                io.Fonts->GetGlyphRangesChineseFull());
-    if (font == nullptr)
-        return false;
+    candidates.emplace_back("/run/host/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc");
+    candidates.emplace_back("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc");
+    candidates.emplace_back("/usr/share/fonts/dejavu/DejaVuSans.ttf");
 
-    io.FontDefault = font;
-    return true;
+    return candidates;
+}
+
+std::optional<std::filesystem::path> loadUiFont(ImGuiIO& io) {
+    for (const auto& path : uiFontCandidates()) {
+        if (!std::filesystem::exists(path))
+            continue;
+
+        const auto extension = path.extension().string();
+        const bool is_font_collection = extension == ".ttc" || extension == ".TTC" ||
+                                        extension == ".otc" || extension == ".OTC";
+
+        ImFontConfig font_cfg{};
+        font_cfg.FontNo = is_font_collection ? kUiFontFaceIndex : 0;
+        font_cfg.PixelSnapH = true;
+
+        ImFont* font = io.Fonts->AddFontFromFileTTF(path.string().c_str(),
+                                                    kUiFontSize,
+                                                    &font_cfg,
+                                                    io.Fonts->GetGlyphRangesChineseFull());
+        if (font == nullptr)
+            continue;
+
+        io.FontDefault = font;
+        return path;
+    }
+
+    return std::nullopt;
 }
 
 std::string formatTime(double seconds) {
@@ -243,17 +269,17 @@ std::string formatPeakDbfsValue(float peak_abs) {
     return std::format("{:.1f}", peak_dbfs);
 }
 
-float peakMeterFraction(float peak_abs, float max_peak_abs) {
-    if (peak_abs <= 0.0f)
+float meterFractionFromAbs(float level_abs, float max_level_abs) {
+    if (level_abs <= 0.0f)
         return 0.0f;
 
-    const float peak_dbfs = std::max(peakAbsToDbfs(peak_abs), kMinVolumeDb);
-    const float max_peak_dbfs = std::max(peakAbsToDbfs(max_peak_abs), 0.0f);
-    const float meter_span_db = max_peak_dbfs - kMinVolumeDb;
+    const float level_dbfs = std::max(peakAbsToDbfs(level_abs), kMinVolumeDb);
+    const float max_level_dbfs = std::max(peakAbsToDbfs(max_level_abs), 0.0f);
+    const float meter_span_db = max_level_dbfs - kMinVolumeDb;
     if (meter_span_db <= 0.0f)
         return 0.0f;
 
-    return std::clamp((peak_dbfs - kMinVolumeDb) / meter_span_db,
+    return std::clamp((level_dbfs - kMinVolumeDb) / meter_span_db,
                       0.0f,
                       1.0f);
 }
@@ -533,7 +559,7 @@ void MainWindow::initImGui() {
     io.FontGlobalScale = dpi_scale;
 
     if (!loadUiFont(io))
-        status_message_ = std::format("Failed to load UI font from {}. Using ImGui default font.", kUiFontPath);
+        status_message_ = "Failed to load bundled or system UI font. Using ImGui default font.";
 
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
@@ -773,6 +799,7 @@ MainWindow::RenderSnapshot MainWindow::captureRenderSnapshot() const {
     const double duration_seconds = app_.durationSeconds();
     const int64_t instantaneous_bitrate_bps = app_.instantaneousBitrateBps();
     const float current_peak_abs = app_.currentPeakAbs();
+    const float current_rms_abs = app_.currentRmsAbs();
     const size_t ring_capacity_samples = app_.ringCapacitySamples();
     const size_t ring_read = app_.ringReadPosition() % std::max<size_t>(ring_capacity_samples, 1);
     const size_t ring_write = app_.ringWritePosition() % std::max<size_t>(ring_capacity_samples, 1);
@@ -785,6 +812,7 @@ MainWindow::RenderSnapshot MainWindow::captureRenderSnapshot() const {
         .duration_ticks = static_cast<int64_t>(duration_seconds * 20.0),
         .bitrate_kbps = instantaneous_bitrate_bps > 0 ? instantaneous_bitrate_bps / 1000 : 0,
         .peak_abs = current_peak_abs,
+        .rms_abs = current_rms_abs,
         .clipped_detected = app_.clippedDetected(),
         .ring_read_bucket = ring_read / 1024,
         .ring_write_bucket = ring_write / 1024,
@@ -800,6 +828,7 @@ bool MainWindow::RenderSnapshot::operator==(const RenderSnapshot& other) const {
            duration_ticks == other.duration_ticks &&
            bitrate_kbps == other.bitrate_kbps &&
            peak_abs == other.peak_abs &&
+           rms_abs == other.rms_abs &&
            clipped_detected == other.clipped_detected &&
            ring_read_bucket == other.ring_read_bucket &&
            ring_write_bucket == other.ring_write_bucket &&
@@ -1475,6 +1504,7 @@ void MainWindow::renderTransportWindow() {
     float volume_linear = std::clamp(app_.volume(), 0.0f, 1.0f);
     const int64_t instant_bitrate_bps = app_.instantaneousBitrateBps();
     const float current_peak_abs = std::max(app_.currentPeakAbs(), 0.0f);
+    const float current_rms_abs = std::max(app_.currentRmsAbs(), 0.0f);
     const bool clipped_detected = app_.clippedDetected();
     const size_t buffered_samples = app_.bufferedSamples();
     const size_t ring_capacity_samples = app_.ringCapacitySamples();
@@ -1483,7 +1513,6 @@ void MainWindow::renderTransportWindow() {
     const float current_kbps = instant_bitrate_bps > 0
         ? static_cast<float>(instant_bitrate_bps) / 1000.0f
         : 0.0f;
-    const float displayed_peak_abs = std::max(current_peak_abs, 1.0f);
     const std::string peak_meter_label = formatPeakDbfsLabel(current_peak_abs);
     if (!sameSharedOwner(info, bitrate_peak_track_)) {
         bitrate_peak_track_ = info;
@@ -1579,7 +1608,7 @@ void MainWindow::renderTransportWindow() {
 
             ImGui::TableNextColumn();
             ImGui::Text("Peak");
-            ImGui::ProgressBar(peakMeterFraction(current_peak_abs, displayed_peak_abs),
+            ImGui::ProgressBar(meterFractionFromAbs(current_rms_abs, 1.0f),
                                ImVec2(-1.0f, 0.0f),
                                peak_meter_label.c_str());
             if (clipped_detected) {

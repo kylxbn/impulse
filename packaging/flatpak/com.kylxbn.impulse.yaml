@@ -1,0 +1,73 @@
+app-id: com.kylxbn.impulse
+branch: stable
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+command: impulse
+
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /lib/*.a
+  - /share/doc/libopenmpt
+
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=host
+  - --filesystem=xdg-run/pipewire-0
+  - --own-name=org.mpris.MediaPlayer2.impulse
+
+modules:
+  - name: sdl3
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DSDL_SHARED=ON
+      - -DSDL_STATIC=OFF
+      - -DSDL_TEST_LIBRARY=OFF
+      - -DSDL_TESTS=OFF
+      - -DSDL_EXAMPLES=OFF
+      - -DSDL_INSTALL_TESTS=OFF
+      - -DSDL_INSTALL_DOCS=OFF
+    sources:
+      - type: git
+        url: https://github.com/libsdl-org/SDL.git
+        commit: 683181b47cfabd293e3ea409f838915b8297a4fd
+
+  - name: libopenmpt
+    buildsystem: simple
+    build-commands:
+      - make -j${FLATPAK_BUILDER_N_JOBS} CONFIG=gcc EXAMPLES=0 OPENMPT123=0 TEST=0 SHARED_LIB=1 STATIC_LIB=0 NO_PORTAUDIO=1 NO_PORTAUDIOCPP=1 NO_PULSEAUDIO=1 NO_SDL2=1 NO_FLAC=1 NO_SNDFILE=1 PREFIX=/app
+      - make CONFIG=gcc EXAMPLES=0 OPENMPT123=0 TEST=0 SHARED_LIB=1 STATIC_LIB=0 NO_PORTAUDIO=1 NO_PORTAUDIOCPP=1 NO_PULSEAUDIO=1 NO_SDL2=1 NO_FLAC=1 NO_SNDFILE=1 PREFIX=/app install
+    sources:
+      - type: git
+        url: https://github.com/OpenMPT/openmpt.git
+        commit: ba9632d86ed96289c69c94e2009c57291b58315a
+
+  - name: impulse
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_TESTS=OFF
+      - -DFETCHCONTENT_SOURCE_DIR_IMGUI=/run/build/impulse/vendor/imgui
+      - -DFETCHCONTENT_SOURCE_DIR_READERWRITERQUEUE=/run/build/impulse/vendor/readerwriterqueue
+      - -DFETCHCONTENT_SOURCE_DIR_LIBVGM=/run/build/impulse/vendor/libvgm
+    sources:
+      - type: dir
+        path: ../..
+      - type: git
+        url: https://github.com/ocornut/imgui.git
+        commit: 80f8298769fe7e6bedbfab3d015154681a0770e7
+        dest: vendor/imgui
+      - type: git
+        url: https://github.com/cameron314/readerwriterqueue.git
+        commit: 211616e0554f93152ab3108b8d93fbc23174a9d9
+        dest: vendor/readerwriterqueue
+      - type: git
+        url: https://github.com/ValleyBell/libvgm.git
+        commit: 9f376fbca88db3e9fd169a8b145b7d6932a020a9
+        dest: vendor/libvgm

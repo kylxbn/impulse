@@ -65,6 +65,7 @@ public:
     float                volume()          const;
     int64_t              instantaneousBitrateBps() const;
     float                currentPeakAbs()  const;
+    float                currentRmsAbs()   const;
     bool                 clippedDetected() const;
     void                 clearClippedIndicator();
     size_t               bufferedSamples() const;

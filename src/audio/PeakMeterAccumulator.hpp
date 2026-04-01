@@ -9,6 +9,7 @@
 
 struct PeakMeterReading {
     float peak_abs = 0.0f;
+    float rms_abs = 0.0f;
     bool  clipped = false;
 };
 
@@ -45,10 +46,7 @@ public:
             remaining_frames -= chunk_frames;
 
             if (accumulated_frames_ == window_frames_) {
-                latest_completed_window = PeakMeterReading{
-                    .peak_abs = peak_abs_,
-                    .clipped = clipped_,
-                };
+                latest_completed_window = currentReading();
                 reset();
             }
         }
@@ -60,10 +58,7 @@ public:
         if (accumulated_frames_ == 0)
             return std::nullopt;
 
-        const PeakMeterReading reading{
-            .peak_abs = peak_abs_,
-            .clipped = clipped_,
-        };
+        const PeakMeterReading reading = currentReading();
         reset();
         return reading;
     }
@@ -71,20 +66,38 @@ public:
     void reset() noexcept {
         accumulated_frames_ = 0;
         peak_abs_ = 0.0f;
+        sum_squares_ = 0.0;
+        sample_count_ = 0;
         clipped_ = false;
     }
 
 private:
+    [[nodiscard]] PeakMeterReading currentReading() const noexcept {
+        const float rms_abs = sample_count_ > 0
+            ? static_cast<float>(std::sqrt(sum_squares_ / static_cast<double>(sample_count_)))
+            : 0.0f;
+
+        return PeakMeterReading{
+            .peak_abs = peak_abs_,
+            .rms_abs = rms_abs,
+            .clipped = clipped_,
+        };
+    }
+
     void updateWindow(const float* samples, size_t sample_count) noexcept {
         for (size_t i = 0; i < sample_count; ++i) {
             const float magnitude = std::abs(samples[i]);
             if (!std::isfinite(magnitude)) {
                 peak_abs_ = std::numeric_limits<float>::infinity();
+                sum_squares_ = std::numeric_limits<double>::infinity();
+                sample_count_ = 1;
                 clipped_ = true;
                 return;
             }
 
             peak_abs_ = std::max(peak_abs_, magnitude);
+            sum_squares_ += static_cast<double>(samples[i]) * static_cast<double>(samples[i]);
+            ++sample_count_;
             clipped_ = clipped_ || magnitude > 1.0f;
         }
     }
@@ -92,5 +105,7 @@ private:
     uint32_t window_frames_ = 1;
     uint32_t accumulated_frames_ = 0;
     float    peak_abs_ = 0.0f;
+    double   sum_squares_ = 0.0;
+    size_t   sample_count_ = 0;
     bool     clipped_ = false;
 };

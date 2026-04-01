@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.kylxbn.impulse</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>Impulse</name>
+  <summary>A technical Linux-native desktop music player</summary>
+  <developer id="com.kylxbn">
+    <name>kylxbn</name>
+  </developer>
+  <launchable type="desktop-id">com.kylxbn.impulse.desktop</launchable>
+  <description>
+    <p>
+      Impulse is a Linux-native desktop music player focused on technical playback details,
+      playlist control, and desktop integration.
+    </p>
+    <p>
+      It uses SDL3 and Dear ImGui for the interface, PipeWire for audio output, FFmpeg as a
+      fallback decoder, and MPRIS for media controls.
+    </p>
+  </description>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+  <keywords>
+    <keyword>music</keyword>
+    <keyword>audio</keyword>
+    <keyword>player</keyword>
+    <keyword>playlist</keyword>
+    <keyword>gapless</keyword>
+    <keyword>metadata</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/kylxbn/impulse</url>
+  <url type="bugtracker">https://github.com/kylxbn/impulse/issues</url>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <binary>impulse</binary>
+  </provides>
+  <releases>
+    <release version="@PROJECT_VERSION@" date="@IMPULSE_APPSTREAM_RELEASE_DATE@"/>
+  </releases>
+</component>

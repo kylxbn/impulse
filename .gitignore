@@ -4,12 +4,9 @@ build_rel/
 build_release/
 build-release/
 build_*/
-/packaging/arch/pkg/
-/packaging/arch/src/
-/packaging/arch/*.pkg.tar.*
-/packaging/arch/*.src.tar.*
-/packaging/arch/*.tar.gz
-/packaging/arch/*.tar.zst
+build-*/
+/.flatpak-builder/
+/dist/*.flatpak
 
 # CMake generated
 compile_commands.json

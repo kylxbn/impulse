@@ -32,14 +32,20 @@ Runtime dependencies:
 - `ffmpeg` (fallback decoder)
 - `pipewire` (for audio output. Sorry, no other option.)
 - `sdl3` (for Wayland support and GUI)
-- `systemd-libs` (for MPRIS)
+- `libsystemd` (for MPRIS)
 
 Build dependencies:
 
-- `base-devel`
+- a C++23 toolchain
 - `cmake`
 - `git`
-- `pkgconf`
+- `ninja`
+- `pkg-config`
+
+Flatpak packaging tools:
+
+- `flatpak`
+- `flatpak-builder`
 
 ## Building
 

@@ -69,6 +69,7 @@ int Application::run() {
                             playback_state_.seek_generation,
                             playback_state_.current_bitrate_bps,
                             playback_state_.current_peak_abs,
+                            playback_state_.current_rms_abs,
                             playback_state_.clipped_detected,
                             playback_state_.volume,
                             &Application::onAudioOutputProgress,
@@ -676,6 +677,7 @@ void Application::publishNowPlaying(std::shared_ptr<NowPlayingTrack> now_playing
 void Application::resetCurrentPlaybackTelemetry() noexcept {
     playback_state_.current_bitrate_bps.store(0, std::memory_order_relaxed);
     playback_state_.current_peak_abs.store(0.0f, std::memory_order_relaxed);
+    playback_state_.current_rms_abs.store(0.0f, std::memory_order_relaxed);
 }
 
 uint32_t Application::clampBufferAheadFrames(float seconds) const {
@@ -866,6 +868,10 @@ int64_t Application::instantaneousBitrateBps() const {
 
 float Application::currentPeakAbs() const {
     return playback_state_.current_peak_abs.load(std::memory_order_relaxed);
+}
+
+float Application::currentRmsAbs() const {
+    return playback_state_.current_rms_abs.load(std::memory_order_relaxed);
 }
 
 bool Application::clippedDetected() const {

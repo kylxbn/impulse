@@ -57,6 +57,7 @@ public:
               std::atomic<int>&      seek_generation,
               std::atomic<int64_t>&  current_bitrate_bps,
               std::atomic<float>&    current_peak_abs,
+              std::atomic<float>&    current_rms_abs,
               std::atomic<bool>&     clipped_detected,
               std::atomic<float>&    stream_volume,
               WakeCallback           wake_callback = nullptr,
@@ -100,6 +101,7 @@ private:
     std::atomic<int>*      seek_gen_    = nullptr;
     std::atomic<int64_t>*  current_bitrate_bps_ = nullptr;
     std::atomic<float>*    current_peak_abs_ = nullptr;
+    std::atomic<float>*    current_rms_abs_ = nullptr;
     std::atomic<bool>*     clipped_detected_ = nullptr;
     std::atomic<float>*    observed_volume_ = nullptr;
 

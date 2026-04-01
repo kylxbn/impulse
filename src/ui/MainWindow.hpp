@@ -199,6 +199,7 @@ private:
         int64_t        duration_ticks = 0;
         int64_t        bitrate_kbps = 0;
         float          peak_abs = 0.0f;
+        float          rms_abs = 0.0f;
         bool           clipped_detected = false;
         size_t         ring_read_bucket = 0;
         size_t         ring_write_bucket = 0;
