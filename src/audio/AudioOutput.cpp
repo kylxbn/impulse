@@ -244,17 +244,19 @@ bool AudioOutput::applyVolumeLocked(float linear_gain) {
     if (has_channel_volume_control_ && channel_volume_count_ > 0) {
         std::array<float, kMaxVolumeChannels> channel_volumes{};
         channel_volumes.fill(clamped_gain);
+        // pw_stream_set_control() accepts a variadic list of controls terminated by id 0.
         if (pw_stream_set_control(stream_,
                                   SPA_PROP_channelVolumes,
                                   channel_volume_count_,
-                                  channel_volumes.data()) == 0) {
+                                  channel_volumes.data(),
+                                  0) == 0) {
             return true;
         }
     }
 
     if (has_scalar_volume_control_) {
         float scalar_volume = clamped_gain;
-        if (pw_stream_set_control(stream_, SPA_PROP_volume, 1, &scalar_volume) == 0)
+        if (pw_stream_set_control(stream_, SPA_PROP_volume, 1, &scalar_volume, 0) == 0)
             return true;
     }
 
