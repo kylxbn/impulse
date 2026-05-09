@@ -69,5 +69,5 @@ modules:
         dest: vendor/readerwriterqueue
       - type: git
         url: https://github.com/ValleyBell/libvgm.git
-        commit: 9f376fbca88db3e9fd169a8b145b7d6932a020a9
+        commit: d1151884997ba4769b070b7c7aaedeffc60a25fb
         dest: vendor/libvgm

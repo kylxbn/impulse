@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(impulse VERSION 1.4.2 LANGUAGES C CXX)
+project(impulse VERSION 1.4.3 LANGUAGES C CXX)
 
 set(IMPULSE_APPSTREAM_RELEASE_DATE "2026-04-01")
 
