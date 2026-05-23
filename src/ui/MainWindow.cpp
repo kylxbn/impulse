@@ -615,8 +615,6 @@ bool MainWindow::runFrame() {
                     openTrackAt(playlist->id, *next_index);
             }
         }
-    } else {
-        clearPendingEndOfTrackAdvance();
     }
 
     const auto playback_status = app_.playbackStatus();
