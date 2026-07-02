@@ -1212,16 +1212,14 @@ void MainWindow::renderBrowserWindow() {
                 if (entry->is_directory) {
                     if (ImGui::MenuItem("Open"))
                         navigate_to = entry->path;
+                    if (ImGui::MenuItem("Replace Playlist and Play Folder Tree"))
+                        replacePlaylistWithPaths(FileBrowser::collectAudioFiles(entry->path, true), true);
+                    if (ImGui::MenuItem("Add Folder Tree to Playlist"))
+                        addDirectoryToPlaylist(entry->path, true, false, false);
+                    if (ImGui::MenuItem("Replace Playlist and Play Folder"))
+                        replacePlaylistWithPaths(FileBrowser::collectAudioFiles(entry->path, false), true);
                     if (ImGui::MenuItem("Add Folder to Playlist"))
                         addDirectoryToPlaylist(entry->path, false, false, false);
-                    if (ImGui::MenuItem("Replace Playlist with Folder"))
-                        replacePlaylistWithPaths(FileBrowser::collectAudioFiles(entry->path, false), false);
-                    if (ImGui::MenuItem("Add Folder Tree"))
-                        addDirectoryToPlaylist(entry->path, true, false, false);
-                    if (ImGui::MenuItem("Replace Playlist with Folder Tree"))
-                        replacePlaylistWithPaths(FileBrowser::collectAudioFiles(entry->path, true), false);
-                    if (ImGui::MenuItem("Play Folder Tree"))
-                        addDirectoryToPlaylist(entry->path, true, true, false);
                 } else {
                     if (ImGui::MenuItem("Play Now"))
                         addTrackToPlaylist(entry->path, true, false);
