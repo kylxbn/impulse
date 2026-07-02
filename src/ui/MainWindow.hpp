@@ -239,6 +239,7 @@ private:
     bool                            lyrics_should_autoscroll_ = false;
 
     std::filesystem::path browser_selected_path_;
+    std::optional<std::filesystem::path> browser_pending_scroll_path_;
     std::vector<std::filesystem::path> pending_external_drop_paths_;
     std::vector<std::filesystem::path> drag_browser_paths_;
     std::vector<uint64_t>              drag_playlist_ids_;

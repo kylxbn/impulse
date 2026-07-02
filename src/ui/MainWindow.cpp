@@ -1134,8 +1134,12 @@ void MainWindow::renderBrowserWindow() {
     ImGui::SameLine();
     ImGui::BeginDisabled(at_filesystem_root);
     if (ImGui::Button("Up") && !at_filesystem_root) {
+        const std::filesystem::path previous_path = browser_.currentPath();
         browser_.navigateUp();
-        browser_selected_path_ = browser_.currentPath();
+        if (browser_.currentPath() != previous_path) {
+            browser_selected_path_ = previous_path;
+            browser_pending_scroll_path_ = previous_path;
+        }
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
@@ -1179,6 +1183,7 @@ void MainWindow::renderBrowserWindow() {
             });
         }
 
+        bool handled_pending_browser_scroll = false;
         for (const DirEntry* entry : entries) {
             ImGui::PushID(entry->path.string().c_str());
             ImGui::TableNextRow();
@@ -1188,6 +1193,10 @@ void MainWindow::renderBrowserWindow() {
             const bool clicked = ImGui::Selectable("##browser_row", selected,
                                                    ImGuiSelectableFlags_SpanAllColumns |
                                                    ImGuiSelectableFlags_AllowDoubleClick);
+            if (browser_pending_scroll_path_ && *browser_pending_scroll_path_ == entry->path) {
+                ImGui::SetScrollHereY(0.5f);
+                handled_pending_browser_scroll = true;
+            }
             if (clicked)
                 browser_selected_path_ = entry->path;
 
@@ -1241,6 +1250,11 @@ void MainWindow::renderBrowserWindow() {
             ImGui::SameLine();
             ImGui::TextUnformatted(entry->display_name.c_str());
             ImGui::PopID();
+        }
+        if (handled_pending_browser_scroll ||
+            (browser_pending_scroll_path_ &&
+             browser_pending_scroll_path_->parent_path() == browser_.currentPath())) {
+            browser_pending_scroll_path_.reset();
         }
 
         if (ImGui::BeginPopupContextWindow("browser_empty_context",
