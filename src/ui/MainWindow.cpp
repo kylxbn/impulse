@@ -142,6 +142,8 @@ ReplayGain::GainApplication replayGainApplicationForItem(const PlaylistItem& ite
 }
 
 const ImVec4 kReplayGainClipTextColor(0.92f, 0.32f, 0.28f, 1.0f);
+const ImVec4 kPeakMeterRmsColor(0.24f, 0.72f, 0.47f, 1.0f);
+const ImVec4 kPeakMeterPeakColor(0.94f, 0.58f, 0.18f, 1.0f);
 
 std::string playlistFileDialogName(std::string_view playlist_name) {
     std::string sanitized;
@@ -286,6 +288,59 @@ float meterFractionFromAbs(float level_abs, float max_level_abs) {
 
 std::string formatPeakDbfsLabel(float peak_abs) {
     return std::format("{} dBFS", formatPeakDbfsValue(peak_abs));
+}
+
+float meterDisplayAbs(float level_abs) {
+    if (!std::isfinite(level_abs))
+        return std::numeric_limits<float>::infinity();
+    return std::max(level_abs, 0.0f);
+}
+
+void drawPeakMeter(float rms_abs, float peak_abs) {
+    const float rms_display_abs = meterDisplayAbs(rms_abs);
+    const float peak_display_abs = std::max(meterDisplayAbs(peak_abs), rms_display_abs);
+    const float peak_fraction = meterFractionFromAbs(peak_display_abs, 1.0f);
+    const float rms_fraction = std::min(meterFractionFromAbs(rms_display_abs, 1.0f),
+                                        peak_fraction);
+
+    const ImVec2 meter_size(std::max(ImGui::GetContentRegionAvail().x, 1.0f),
+                            ImGui::GetFrameHeight());
+    ImGui::InvisibleButton("##peak_meter", meter_size);
+
+    const ImVec2 frame_min = ImGui::GetItemRectMin();
+    const ImVec2 frame_max = ImGui::GetItemRectMax();
+    const float frame_width = frame_max.x - frame_min.x;
+    const float rounding = ImGui::GetStyle().FrameRounding;
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    draw_list->AddRectFilled(frame_min,
+                             frame_max,
+                             ImGui::GetColorU32(ImGuiCol_FrameBg),
+                             rounding);
+
+    auto fill_meter = [&](float fraction, ImU32 color) {
+        if (fraction <= 0.0f)
+            return;
+
+        const ImVec2 fill_max(frame_min.x + frame_width * fraction, frame_max.y);
+        draw_list->AddRectFilled(frame_min, fill_max, color, rounding);
+    };
+
+    draw_list->PushClipRect(frame_min, frame_max, true);
+    fill_meter(peak_fraction, ImGui::GetColorU32(kPeakMeterPeakColor));
+    fill_meter(rms_fraction, ImGui::GetColorU32(kPeakMeterRmsColor));
+    draw_list->PopClipRect();
+
+    draw_list->AddRect(frame_min,
+                       frame_max,
+                       ImGui::GetColorU32(ImGuiCol_Border),
+                       rounding);
+
+    if (ImGui::IsItemHovered()) {
+        const std::string rms_label = formatPeakDbfsLabel(rms_abs);
+        const std::string peak_label = formatPeakDbfsLabel(peak_abs);
+        ImGui::SetTooltip("RMS %s\nPeak %s", rms_label.c_str(), peak_label.c_str());
+    }
 }
 
 const char* replayGainModeLabel(ReplayGain::GainMode mode) {
@@ -1511,7 +1566,6 @@ void MainWindow::renderTransportWindow() {
     const float current_kbps = instant_bitrate_bps > 0
         ? static_cast<float>(instant_bitrate_bps) / 1000.0f
         : 0.0f;
-    const std::string peak_meter_label = formatPeakDbfsLabel(current_peak_abs);
     if (!sameSharedOwner(info, bitrate_peak_track_)) {
         bitrate_peak_track_ = info;
         bitrate_bar_peak_kbps_ = 0.0f;
@@ -1606,9 +1660,7 @@ void MainWindow::renderTransportWindow() {
 
             ImGui::TableNextColumn();
             ImGui::Text("Peak");
-            ImGui::ProgressBar(meterFractionFromAbs(current_rms_abs, 1.0f),
-                               ImVec2(-1.0f, 0.0f),
-                               peak_meter_label.c_str());
+            drawPeakMeter(current_rms_abs, current_peak_abs);
             if (clipped_detected) {
                 ImGui::PushStyleColor(ImGuiCol_Text, kReplayGainClipTextColor);
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.32f, 0.07f, 0.06f, 0.9f));
