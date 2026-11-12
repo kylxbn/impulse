@@ -23,6 +23,24 @@ inline PlaybackStatus resumeStatusAfterSuccessfulSeek(PlaybackStatus previous_st
     return previous_status;
 }
 
+// Once the current track has fully drained, the decode thread reports
+// EndOfTrack while it still holds a gapless request/preload and Stopped when
+// it has nothing queued. The UI must open the next track itself in the latter
+// case, and also when the transition was never eligible for gapless.
+inline bool shouldOpenEndOfTrackTargetDirectly(PlaybackStatus status, bool can_gapless) {
+    if (status == PlaybackStatus::Stopped)
+        return true;
+    if (status == PlaybackStatus::EndOfTrack)
+        return !can_gapless;
+    return false;
+}
+
+inline bool isIdlePlaybackStatus(PlaybackStatus status) {
+    return status == PlaybackStatus::Stopped ||
+           status == PlaybackStatus::EndOfTrack ||
+           status == PlaybackStatus::Error;
+}
+
 inline bool shouldPublishAudibleEndOfTrack(bool decoder_reached_eof,
                                            size_t buffered_samples,
                                            bool has_prepared_gapless_track,

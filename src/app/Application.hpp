@@ -36,13 +36,10 @@ public:
                          uint64_t playlist_tab_id = 0,
                          uint64_t playlist_item_id = 0);
     void commandOpenFileGapless(MediaSource source,
-                                uint64_t playlist_tab_id = 0,
-                                uint64_t playlist_item_id = 0,
-                                uint64_t playlist_revision = 0);
-    void commandOpenFileGapless(std::filesystem::path path,
-                                uint64_t playlist_tab_id = 0,
-                                uint64_t playlist_item_id = 0,
-                                uint64_t playlist_revision = 0);
+                                uint64_t playlist_tab_id,
+                                uint64_t playlist_item_id,
+                                uint64_t playlist_revision,
+                                PlaybackTrackInstance preceding_track);
     void invalidatePendingGaplessRequests();
     void notifyPlaylistChanged(uint64_t playlist_tab_id, uint64_t playlist_revision);
     void forgetPlaylist(uint64_t playlist_tab_id);
@@ -88,12 +85,12 @@ private:
     void discardBufferedAudio(int64_t target_frame);
     bool processCommand(const Command& cmd);
     bool openTrack(const MediaSource& source,
-                   bool preserve_buffered_audio,
-                   bool defer_public_switch_until_boundary,
                    uint64_t playlist_tab_id,
                    uint64_t playlist_item_id);
+    bool seekCurrentTrack(double position_seconds);
     bool reconnectCurrentLiveStream();
     void handleEndOfTrack();
+    void maybeSettleEndOfTrackStatus();
     void maybePreparePendingGaplessTrack();
     bool maybeCommitPreparedGaplessTrack(std::vector<float>& pending_pcm,
                                          size_t& pending_samples,
@@ -147,5 +144,5 @@ private:
     std::atomic<uint32_t>                  target_buffer_ahead_frames_{16u * 48000u};
     mutable std::mutex                     playlist_revisions_mutex_;
     std::unordered_map<uint64_t, uint64_t> playlist_revisions_;
-    int                                    live_stream_reconnect_attempts_ = 0;
+    std::atomic<int>                       live_stream_reconnect_attempts_{0};
 };

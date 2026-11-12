@@ -130,8 +130,9 @@ private:
                                 bool play_first,
                                 bool insert_next);
 
-    bool playFirstTrackIfStopped();
+    bool startPlaybackIfIdle();
     void togglePlayPause();
+    void stopPlayback();
     void requestQuit();
     void processMprisCommands();
     void handleMprisCommand(const MprisCommand& command);
@@ -182,8 +183,12 @@ private:
     [[nodiscard]] std::optional<size_t> manualAdvanceIndex(const PlaylistDocument& playlist,
                                                            bool forward) const;
 
+    void updateEndOfTrackAdvance(PlaybackStatus status);
     void clearPendingEndOfTrackAdvance();
+    void invalidatePendingEndOfTrackAdvance();
+    void markEndOfTrackAdvanceHandled();
     void syncPendingEndOfTrackAdvanceWithNowPlaying();
+    [[nodiscard]] bool canGaplessTransitionTo(const PlaylistItem& next) const;
     void syncAlbumArtTexture(const std::shared_ptr<const TrackInfo>& info);
     void syncLyricsDocument(const std::shared_ptr<const TrackInfo>& info);
     void scheduleGaplessAdvanceTrack();
@@ -280,7 +285,9 @@ private:
     std::string status_message_;
     float bitrate_bar_peak_kbps_ = 0.0f;
     std::shared_ptr<const TrackInfo> bitrate_peak_track_;
-    bool pending_end_of_track_advance_ = false;
+    // Set once an end-of-track decision has been made for the audible track
+    // instance. It stays set until that instance changes so the same EOF is
+    // never acted on twice.
     std::optional<PlaybackTrackInstance> pending_end_of_track_track_;
     std::optional<uint64_t> pending_end_of_track_target_item_id_;
     bool pending_error_advance_ = false;

@@ -122,6 +122,7 @@ void Application::decodeLoop(std::stop_token stop) {
         maybePreparePendingGaplessTrack();
         if (maybeCommitPreparedGaplessTrack(pending_pcm, pending_samples, pending_bitrate_bps))
             maybeCommitGaplessTrackSwitches();
+        maybeSettleEndOfTrackStatus();
 
         auto status = playback_state_.status.load(std::memory_order_relaxed);
         const bool buffering = status == PlaybackStatus::Buffering;
@@ -153,7 +154,7 @@ void Application::decodeLoop(std::stop_token stop) {
                    audio_output_.consumeUnderrunDetected() &&
                    !playback_state_.decoder_reached_eof.load(std::memory_order_relaxed)) {
             resetCurrentPlaybackTelemetry();
-            live_stream_reconnect_attempts_ = 0;
+            live_stream_reconnect_attempts_.store(0, std::memory_order_relaxed);
             playback_state_.status.store(PlaybackStatus::Buffering, std::memory_order_relaxed);
             audio_output_.setPaused(true);
             continue;
@@ -268,7 +269,7 @@ void Application::decodeLoop(std::stop_token stop) {
             if (committed_frames >= target_ahead_frames ||
                 (decoder_reached_eof && committed_frames > 0)) {
                 if (live_stream)
-                    live_stream_reconnect_attempts_ = 0;
+                    live_stream_reconnect_attempts_.store(0, std::memory_order_relaxed);
                 playback_state_.status.store(PlaybackStatus::Playing, std::memory_order_relaxed);
                 audio_output_.setPaused(false);
                 maybeCommitGaplessTrackSwitches();
@@ -332,9 +333,11 @@ bool Application::reconnectCurrentLiveStream() {
     if (source.empty() || !source.isUrl())
         return false;
 
-    if (live_stream_reconnect_attempts_ >= kMaxLiveStreamReconnectAttempts)
+    if (live_stream_reconnect_attempts_.load(std::memory_order_relaxed) >=
+        kMaxLiveStreamReconnectAttempts) {
         return false;
-    ++live_stream_reconnect_attempts_;
+    }
+    live_stream_reconnect_attempts_.fetch_add(1, std::memory_order_relaxed);
 
     const uint64_t playlist_tab_id = now_playing ? now_playing->playlist_tab_id : 0;
     const uint64_t playlist_item_id = now_playing ? now_playing->playlist_item_id : 0;
@@ -366,25 +369,28 @@ bool Application::processCommand(const Command& cmd) {
         using T = std::decay_t<decltype(c)>;
 
         if constexpr (std::is_same_v<T, CommandOpenFile>) {
-            openTrack(c.source, false, false, c.playlist_tab_id, c.playlist_item_id);
+            openTrack(c.source, c.playlist_tab_id, c.playlist_item_id);
             return true;
 
         } else if constexpr (std::is_same_v<T, CommandOpenFileGapless>) {
-            if (!decoder_.supportsGaplessPreparation() ||
-                !Decoder::supportsGaplessForSource(c.source)) {
-                pending_gapless_request_.clear();
+            GaplessPendingRequest request{
+                .source = c.source,
+                .playlist_tab_id = c.playlist_tab_id,
+                .playlist_item_id = c.playlist_item_id,
+                .playlist_revision = c.playlist_revision,
+                .policy_generation = c.policy_generation,
+                .preceding_track = c.preceding_track,
+            };
+            const auto now_playing = currentNowPlaying();
+            if (!gaplessRequestFollowsAudibleTrack(request, now_playing) ||
+                !Decoder::supportsGaplessForSource(now_playing->track_info->source) ||
+                !Decoder::supportsGaplessForSource(request.source)) {
+                clearPendingGaplessState();
                 return false;
             }
-            pending_gapless_request_.schedule(
-                GaplessPendingRequest{
-                    c.source,
-                    c.playlist_tab_id,
-                    c.playlist_item_id,
-                    c.playlist_revision,
-                    c.policy_generation,
-                },
-                currentPlaylistRevision(c.playlist_tab_id),
-                currentGaplessPolicyGeneration());
+            pending_gapless_request_.schedule(std::move(request),
+                                              currentPlaylistRevision(c.playlist_tab_id),
+                                              currentGaplessPolicyGeneration());
             return false;
 
         } else if constexpr (std::is_same_v<T, CommandPlay>) {
@@ -403,29 +409,7 @@ bool Application::processCommand(const Command& cmd) {
             return true;
 
         } else if constexpr (std::is_same_v<T, CommandSeek>) {
-            if (!decoder_.is_open()) return false;
-            // TODO: Cancel any staged gapless preload and then honor the seek.
-            if (prepared_gapless_track_) return false;
-            playback_state_.seek_in_progress.store(true, std::memory_order_relaxed);
-            const auto previous_status = playback_state_.status.load(std::memory_order_relaxed);
-            playback_state_.status.store(PlaybackStatus::Seeking, std::memory_order_relaxed);
-            if (!decoder_.seek(c.position_seconds)) {
-                playback_state_.status.store(previous_status, std::memory_order_relaxed);
-                playback_state_.seek_in_progress.store(false, std::memory_order_relaxed);
-                return false;
-            }
-            int64_t target_frame = static_cast<int64_t>(
-                c.position_seconds * audio_output_.config().sample_rate);
-            discardBufferedAudio(target_frame);
-            if (auto now_playing = currentNowPlaying()) {
-                auto sought_track = std::make_shared<NowPlayingTrack>(*now_playing);
-                sought_track->start_frame = 0;
-                publishNowPlaying(std::move(sought_track));
-            }
-            playback_state_.status.store(resumeStatusAfterSuccessfulSeek(previous_status),
-                                         std::memory_order_relaxed);
-            playback_state_.seek_in_progress.store(false, std::memory_order_relaxed);
-            return true;
+            return seekCurrentTrack(c.position_seconds);
 
         } else if constexpr (std::is_same_v<T, CommandSetVolume>) {
             audio_output_.setVolume(c.linear_gain);
@@ -447,56 +431,95 @@ bool Application::processCommand(const Command& cmd) {
 
 // ---------------------------------------------------------------------------
 bool Application::openTrack(const MediaSource& source,
-                            bool preserve_buffered_audio,
-                            bool defer_public_switch_until_boundary,
                             uint64_t playlist_tab_id,
                             uint64_t playlist_item_id) {
     clearPendingGaplessState();
     decoder_.close();
     playback_state_.decoder_reached_eof.store(false, std::memory_order_relaxed);
-
-    if (!preserve_buffered_audio)
-        discardBufferedAudio(0);
+    discardBufferedAudio(0);
 
     auto result = decoder_.open(source, audio_output_.config().sample_rate);
     if (!result.ok) {
         resetCurrentPlaybackTelemetry();
-        if (!preserve_buffered_audio) {
-            publishNowPlaying(nullptr);
-            playback_state_.status.store(PlaybackStatus::Error,
-                                         std::memory_order_relaxed);
-        }
+        publishNowPlaying(nullptr);
+        playback_state_.status.store(PlaybackStatus::Error, std::memory_order_relaxed);
         return false;
     }
 
     auto now_playing = std::make_shared<NowPlayingTrack>();
     now_playing->track_info = std::make_shared<TrackInfo>(decoder_.trackInfo());
     now_playing->total_frames = decoder_.totalFrames();
+    now_playing->start_frame = 0;
     now_playing->playlist_tab_id = playlist_tab_id;
     now_playing->playlist_item_id = playlist_item_id;
-
-    if (defer_public_switch_until_boundary) {
-        const uint32_t channels = audio_output_.config().channels;
-        const int64_t absolute_frame = playback_state_.current_frame.load(std::memory_order_relaxed);
-        const int64_t buffered_frames = channels > 0
-            ? static_cast<int64_t>(audio_ring_.available_read() / channels)
-            : 0;
-
-        now_playing->start_frame = absolute_frame + buffered_frames;
-        gapless_track_switches_.enqueue(std::move(now_playing));
-    } else {
-        now_playing->start_frame = 0;
-        publishNowPlaying(std::move(now_playing));
-    }
+    publishNowPlaying(std::move(now_playing));
 
     resetCurrentPlaybackTelemetry();
     const bool buffering_stream = decoder_.trackInfo().is_stream;
     if (buffering_stream)
-        live_stream_reconnect_attempts_ = 0;
+        live_stream_reconnect_attempts_.store(0, std::memory_order_relaxed);
     audio_output_.setPaused(buffering_stream);
     playback_state_.status.store(buffering_stream ? PlaybackStatus::Buffering
                                                   : PlaybackStatus::Playing,
                                  std::memory_order_relaxed);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// The decoder may not be positioned on the audible track when a seek arrives:
+// a gapless preload reuses it for the next track, and a failed preload leaves
+// it closed. In those cases the audible track is reopened before seeking.
+bool Application::seekCurrentTrack(double position_seconds) {
+    const auto now_playing = currentNowPlaying();
+    if (!now_playing || !now_playing->track_info)
+        return false;
+
+    const MediaSource& source = now_playing->track_info->source;
+    if (source.empty() || !now_playing->track_info->seekable)
+        return false;
+
+    const bool decoder_on_audible_track =
+        decoder_.is_open() &&
+        !prepared_gapless_track_ &&
+        decoder_.trackInfo().source == source;
+
+    playback_state_.seek_in_progress.store(true, std::memory_order_relaxed);
+    const auto previous_status = playback_state_.status.load(std::memory_order_relaxed);
+    playback_state_.status.store(PlaybackStatus::Seeking, std::memory_order_relaxed);
+
+    if (!decoder_on_audible_track) {
+        clearPendingGaplessState();
+        decoder_.close();
+        if (!decoder_.open(source, audio_output_.config().sample_rate).ok) {
+            discardBufferedAudio(0);
+            publishNowPlaying(nullptr);
+            playback_state_.status.store(PlaybackStatus::Error, std::memory_order_relaxed);
+            playback_state_.seek_in_progress.store(false, std::memory_order_relaxed);
+            return true;
+        }
+    }
+
+    const bool sought = decoder_.seek(position_seconds);
+    if (!sought && decoder_on_audible_track) {
+        playback_state_.status.store(previous_status, std::memory_order_relaxed);
+        playback_state_.seek_in_progress.store(false, std::memory_order_relaxed);
+        return false;
+    }
+
+    // A freshly reopened decoder that refused to seek is positioned at the
+    // start, so publish that position rather than the requested one.
+    const double effective_seconds = sought ? position_seconds : 0.0;
+    const int64_t target_frame = static_cast<int64_t>(
+        effective_seconds * audio_output_.config().sample_rate);
+    discardBufferedAudio(target_frame);
+
+    auto sought_track = std::make_shared<NowPlayingTrack>(*now_playing);
+    sought_track->start_frame = 0;
+    publishNowPlaying(std::move(sought_track));
+
+    playback_state_.status.store(resumeStatusAfterSuccessfulSeek(previous_status),
+                                 std::memory_order_relaxed);
+    playback_state_.seek_in_progress.store(false, std::memory_order_relaxed);
     return true;
 }
 
@@ -508,16 +531,21 @@ void Application::handleEndOfTrack() {
     playback_state_.status.store(has_pending_track ? PlaybackStatus::EndOfTrack
                                                    : PlaybackStatus::Stopped,
                                  std::memory_order_relaxed);
-    // TODO: playlist manager will post CommandOpenFile for next track
+}
+
+// EndOfTrack promises the UI that a gapless follow-up is still queued. If that
+// request was discarded afterwards (stale revision, failed preload), settle
+// into Stopped so the UI takes over the advance.
+void Application::maybeSettleEndOfTrackStatus() {
+    if (playback_state_.status.load(std::memory_order_relaxed) != PlaybackStatus::EndOfTrack)
+        return;
+    if (prepared_gapless_track_ || pending_gapless_request_.peek())
+        return;
+
+    playback_state_.status.store(PlaybackStatus::Stopped, std::memory_order_relaxed);
 }
 
 void Application::maybePreparePendingGaplessTrack() {
-    if (!decoder_.supportsGaplessPreparation()) {
-        clearPreparedGaplessTrack();
-        pending_gapless_request_.clear();
-        return;
-    }
-
     const GaplessPendingRequest* scheduled_request = nullptr;
     if (const GaplessPendingRequest* pending_request = pending_gapless_request_.peek()) {
         scheduled_request = pending_gapless_request_.current(
@@ -547,6 +575,13 @@ void Application::maybePreparePendingGaplessTrack() {
         clearPreparedGaplessTrack();
 
     if (!prepared_gapless_track_) {
+        // Preloading reuses the main decoder, so never steal it from a track
+        // that is still being decoded.
+        if (decoder_.is_open() &&
+            !playback_state_.decoder_reached_eof.load(std::memory_order_relaxed)) {
+            return;
+        }
+
         decoder_.close();
 
         auto result = decoder_.open(pending_request->source, audio_output_.config().sample_rate);
@@ -738,23 +773,16 @@ void Application::commandOpenFile(std::filesystem::path path,
 void Application::commandOpenFileGapless(MediaSource source,
                                          uint64_t playlist_tab_id,
                                          uint64_t playlist_item_id,
-                                         uint64_t playlist_revision) {
+                                         uint64_t playlist_revision,
+                                         PlaybackTrackInstance preceding_track) {
     enqueueCommand(CommandOpenFileGapless{
-        std::move(source),
-        playlist_tab_id,
-        playlist_item_id,
-        playlist_revision,
-        currentGaplessPolicyGeneration(),
+        .source = std::move(source),
+        .playlist_tab_id = playlist_tab_id,
+        .playlist_item_id = playlist_item_id,
+        .playlist_revision = playlist_revision,
+        .policy_generation = currentGaplessPolicyGeneration(),
+        .preceding_track = preceding_track,
     });
-}
-void Application::commandOpenFileGapless(std::filesystem::path path,
-                                         uint64_t playlist_tab_id,
-                                         uint64_t playlist_item_id,
-                                         uint64_t playlist_revision) {
-    commandOpenFileGapless(MediaSource::fromPath(std::move(path)),
-                           playlist_tab_id,
-                           playlist_item_id,
-                           playlist_revision);
 }
 void Application::invalidatePendingGaplessRequests() {
     gapless_policy_generation_.fetch_add(1, std::memory_order_acq_rel);
@@ -775,7 +803,11 @@ void Application::commandPlay() {
         return;
 
     resetCurrentPlaybackTelemetry();
-    const bool live_stream = decoder_.is_open() && decoder_.trackInfo().is_stream;
+    // The decoder belongs to the decode thread; the published snapshot is the
+    // only safe view of the audible track from here.
+    const auto now_playing = currentNowPlaying();
+    const bool live_stream = now_playing && now_playing->track_info &&
+                             now_playing->track_info->is_stream;
     if (live_stream) {
         const size_t target_ahead_frames =
             target_buffer_ahead_frames_.load(std::memory_order_relaxed);
@@ -789,7 +821,7 @@ void Application::commandPlay() {
             signalDecodeLoop();
             return;
         }
-        live_stream_reconnect_attempts_ = 0;
+        live_stream_reconnect_attempts_.store(0, std::memory_order_relaxed);
     }
     playback_state_.status.store(PlaybackStatus::Playing, std::memory_order_relaxed);
     audio_output_.setPaused(false);

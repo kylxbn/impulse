@@ -68,8 +68,12 @@ public:
     // Thread-safe stream volume control (linear gain converted from the UI's dB slider).
     void setVolume(float linear_gain);
     float volume() const;
+    // Blocks until the realtime callback has acknowledged the seek generation.
+    // Gives up after max_wait so a suspended or dead stream cannot wedge the
+    // decode thread; the callback still handles the generation change when it
+    // eventually runs.
     void waitForSeekGeneration(int generation,
-                               std::chrono::milliseconds poll_interval = std::chrono::milliseconds{1});
+                               std::chrono::milliseconds max_wait = std::chrono::milliseconds{1000});
     void setPaused(bool paused) {
         paused_.store(paused, std::memory_order_relaxed);
         if (paused)

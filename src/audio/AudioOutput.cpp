@@ -155,7 +155,6 @@ bool AudioOutput::init(Ring&                 ring,
 // ---------------------------------------------------------------------------
 void AudioOutput::shutdown() {
     stream_active_.store(false, std::memory_order_release);
-    observed_seek_gen_.notify_all();
     if (loop_) pw_thread_loop_stop(loop_);
     if (stream_) { pw_stream_destroy(stream_); stream_ = nullptr; }
     if (loop_)   { pw_thread_loop_destroy(loop_); loop_ = nullptr; }
@@ -191,13 +190,15 @@ float AudioOutput::volume() const {
 }
 
 void AudioOutput::waitForSeekGeneration(int generation,
-                                        std::chrono::milliseconds poll_interval) {
-    (void) poll_interval;
+                                        std::chrono::milliseconds max_wait) {
+    constexpr auto kPollInterval = std::chrono::milliseconds{1};
+    const auto deadline = std::chrono::steady_clock::now() + max_wait;
 
     int observed = observed_seek_gen_.load(std::memory_order_acquire);
     while (stream_active_.load(std::memory_order_acquire) &&
-           observed != generation) {
-        observed_seek_gen_.wait(observed, std::memory_order_acquire);
+           observed != generation &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(kPollInterval);
         observed = observed_seek_gen_.load(std::memory_order_acquire);
     }
 }
@@ -305,7 +306,6 @@ void AudioOutput::onProcess(void* userdata) {
     if (gen != self->last_seek_gen_) {
         self->last_seek_gen_ = gen;
         self->observed_seek_gen_.store(gen, std::memory_order_release);
-        self->observed_seek_gen_.notify_all();
         self->current_bitrate_bps_->store(0, std::memory_order_relaxed);
         self->current_peak_abs_->store(0.0f, std::memory_order_relaxed);
         self->current_rms_abs_->store(0.0f, std::memory_order_relaxed);
@@ -316,6 +316,7 @@ void AudioOutput::onProcess(void* userdata) {
         spabuf->datas[0].chunk->stride = static_cast<int32_t>(
             self->config_.channels * sizeof(float));
         spabuf->datas[0].chunk->size   = n_frames * self->config_.channels * sizeof(float);
+        pwbuf->size = n_frames;
         pw_stream_queue_buffer(self->stream_, pwbuf);
         return;
     }

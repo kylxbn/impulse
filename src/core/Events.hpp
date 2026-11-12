@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/MediaSource.hpp"
+#include "core/PlaybackStatusUtils.hpp"
 #include "audio/ReplayGain.hpp"
 
 #include <variant>
@@ -20,6 +21,10 @@ struct CommandOpenFileGapless {
     uint64_t              playlist_item_id = 0;
     uint64_t              playlist_revision = 0;
     uint64_t              policy_generation = 0;
+    // The audible track instance this request is meant to follow. The decode
+    // thread rejects the request if a different instance is audible by the
+    // time it arrives.
+    PlaybackTrackInstance preceding_track;
 };
 struct CommandPlay      {};
 struct CommandPause     {};
