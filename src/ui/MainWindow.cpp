@@ -649,30 +649,9 @@ bool MainWindow::runFrame() {
     syncPendingEndOfTrackAdvanceWithNowPlaying();
     processMprisCommands();
 
-    const bool decoder_reached_eof = app_.decoderReachedEof();
-    if (decoder_reached_eof) {
-        if (!pending_end_of_track_advance_)
-            scheduleGaplessAdvanceTrack();
-        else if (const auto* playlist = playbackPlaylistDocument();
-                 playlist &&
-                 (app_.playbackStatus() == PlaybackStatus::EndOfTrack ||
-                  app_.playbackStatus() == PlaybackStatus::Stopped)) {
-            const auto next_index =
-                playbackIndexForItemId(playlist->playlist, pending_end_of_track_target_item_id_);
-            if (next_index) {
-                const PlaylistItem& next = playlist->playlist.tracks()[*next_index];
-                const bool can_gapless = frame_now_playing_ &&
-                    frame_now_playing_->track_info &&
-                    !frame_now_playing_->track_info->is_stream &&
-                    Decoder::supportsGaplessForSource(frame_now_playing_->track_info->source) &&
-                    Decoder::supportsGaplessForSource(next.source);
-                if (!can_gapless)
-                    openTrackAt(playlist->id, *next_index);
-            }
-        }
-    }
-
     const auto playback_status = app_.playbackStatus();
+    updateEndOfTrackAdvance(playback_status);
+
     if (playback_status == PlaybackStatus::Error &&
         frame_now_playing_ &&
         frame_now_playing_->track_info &&
@@ -1025,7 +1004,7 @@ void MainWindow::renderMainMenu() {
         if (ImGui::MenuItem("Play/Pause", "Space"))
             togglePlayPause();
         if (ImGui::MenuItem("Stop", nullptr, false, app_.playbackStatus() != PlaybackStatus::Stopped))
-            app_.commandStop();
+            stopPlayback();
         if (ImGui::MenuItem("Previous Track", "Ctrl+Left", false, has_playback_context))
             openPrevTrack();
         if (ImGui::MenuItem("Next Track", "Ctrl+Right", false, has_playback_context))
@@ -1639,7 +1618,7 @@ void MainWindow::renderTransportWindow() {
             ImGui::SameLine();
             if (ImGui::Button("Next")) openNextTrack();
             ImGui::SameLine();
-            if (ImGui::Button("Stop")) app_.commandStop();
+            if (ImGui::Button("Stop")) stopPlayback();
 
             ImGui::TableNextColumn();
             ImGui::SetNextItemWidth(-1.0f);
@@ -2657,8 +2636,8 @@ void MainWindow::addDirectoryToPlaylist(const std::filesystem::path& path,
     addPathsToPlaylist(FileBrowser::collectAudioFiles(path, recursive), play_first, insert_next);
 }
 
-bool MainWindow::playFirstTrackIfStopped() {
-    if (app_.playbackStatus() != PlaybackStatus::Stopped)
+bool MainWindow::startPlaybackIfIdle() {
+    if (!isIdlePlaybackStatus(app_.playbackStatus()))
         return false;
 
     if (frame_now_playing_ &&
@@ -2697,8 +2676,14 @@ void MainWindow::togglePlayPause() {
         return;
     }
 
-    if (!playFirstTrackIfStopped())
+    if (!startPlaybackIfIdle())
         app_.commandPlay();
+}
+
+void MainWindow::stopPlayback() {
+    clearPendingEndOfTrackAdvance();
+    seek_drag_progress_.reset();
+    app_.commandStop();
 }
 
 void MainWindow::requestQuit() {
@@ -2729,7 +2714,7 @@ void MainWindow::handleMprisCommand(const MprisCommand& command) {
             if (app_.playbackStatus() == PlaybackStatus::Paused)
                 app_.commandPlay();
             else
-                playFirstTrackIfStopped();
+                startPlaybackIfIdle();
             break;
 
         case MprisCommandType::Pause:
@@ -2741,9 +2726,7 @@ void MainWindow::handleMprisCommand(const MprisCommand& command) {
             break;
 
         case MprisCommandType::Stop:
-            clearPendingEndOfTrackAdvance();
-            seek_drag_progress_.reset();
-            app_.commandStop();
+            stopPlayback();
             break;
 
         case MprisCommandType::Next:
@@ -2820,6 +2803,7 @@ void MainWindow::seekTo(double target_seconds) {
 
     const double target = std::clamp(target_seconds, 0.0, duration);
     seek_drag_progress_.reset();
+    clearPendingEndOfTrackAdvance();
     app_.commandSeek(target);
     pending_mpris_seek_track_id_ = buildMprisTrackId(*now_playing);
     pending_mpris_seek_target_us_ = secondsToMprisTime(target);
@@ -2851,7 +2835,7 @@ void MainWindow::applyRepeatMode(RepeatMode mode) {
     if (settings_.repeat_mode == mode)
         return;
 
-    clearPendingEndOfTrackAdvance();
+    invalidatePendingEndOfTrackAdvance();
     app_.invalidatePendingGaplessRequests();
     settings_.repeat_mode = mode;
     if (!SettingsStorage::save(settings_path_, settings_))
@@ -2880,7 +2864,6 @@ void MainWindow::shufflePlaylist(uint64_t playlist_id) {
         return;
 
     playlist->playlist.shuffle();
-    clearPendingEndOfTrackAdvance();
     seek_drag_progress_.reset();
     notifyPlaylistStructureChanged(playlist_id);
     status_message_ = std::format("Shuffled {}.", playlist->name);
@@ -2997,27 +2980,82 @@ void MainWindow::notifyPlaylistStructureChanged() {
 }
 
 void MainWindow::notifyPlaylistStructureChanged(uint64_t playlist_id) {
-    clearPendingEndOfTrackAdvance();
+    invalidatePendingEndOfTrackAdvance();
     if (auto* document = playlistDocument(playlist_id)) {
         ++document->revision;
         syncPlaylistRevision(playlist_id);
     }
 }
 
+void MainWindow::updateEndOfTrackAdvance(PlaybackStatus status) {
+    if (!app_.decoderReachedEof())
+        return;
+
+    if (!pending_end_of_track_track_) {
+        scheduleGaplessAdvanceTrack();
+        return;
+    }
+
+    if (status != PlaybackStatus::EndOfTrack && status != PlaybackStatus::Stopped)
+        return;
+
+    const auto* playlist = playbackPlaylistDocument();
+    if (!playlist)
+        return;
+
+    const auto next_index =
+        playbackIndexForItemId(playlist->playlist, pending_end_of_track_target_item_id_);
+    if (!next_index)
+        return;
+
+    const PlaylistItem& next = playlist->playlist.tracks()[*next_index];
+    if (!shouldOpenEndOfTrackTargetDirectly(status, canGaplessTransitionTo(next)))
+        return;
+
+    const uint64_t playlist_id = playlist->id;
+    openTrackAt(playlist_id, *next_index);
+    markEndOfTrackAdvanceHandled();
+}
+
 void MainWindow::clearPendingEndOfTrackAdvance() {
-    pending_end_of_track_advance_ = false;
     pending_end_of_track_track_.reset();
     pending_end_of_track_target_item_id_.reset();
 }
 
+// Playlist or repeat-mode changes make the scheduled target meaningless. While
+// playback is still running the decision is simply redone on the next frame.
+// After the player has already come to rest the track stays "handled" so a
+// later edit does not silently resume playback.
+void MainWindow::invalidatePendingEndOfTrackAdvance() {
+    if (!pending_end_of_track_track_)
+        return;
+
+    pending_end_of_track_target_item_id_.reset();
+    if (app_.playbackStatus() != PlaybackStatus::Stopped)
+        pending_end_of_track_track_.reset();
+}
+
+void MainWindow::markEndOfTrackAdvanceHandled() {
+    pending_end_of_track_track_ = playbackTrackInstance(frame_now_playing_);
+    pending_end_of_track_target_item_id_.reset();
+}
+
 void MainWindow::syncPendingEndOfTrackAdvanceWithNowPlaying() {
-    if (!pending_end_of_track_advance_)
+    if (!pending_end_of_track_track_)
         return;
 
     if (playbackTrackInstanceMatches(pending_end_of_track_track_, frame_now_playing_))
         return;
 
     clearPendingEndOfTrackAdvance();
+}
+
+bool MainWindow::canGaplessTransitionTo(const PlaylistItem& next) const {
+    return frame_now_playing_ &&
+           frame_now_playing_->track_info &&
+           !frame_now_playing_->track_info->is_stream &&
+           Decoder::supportsGaplessForSource(frame_now_playing_->track_info->source) &&
+           Decoder::supportsGaplessForSource(next.source);
 }
 
 void MainWindow::syncPlaylistRevision(uint64_t playlist_id) {
@@ -3288,11 +3326,8 @@ void MainWindow::closePlaylist(uint64_t playlist_id) {
         return;
 
     app_.forgetPlaylist(playlist_id);
-    if (playbackPlaylistId() == playlist_id) {
-        app_.commandStop();
-        clearPendingEndOfTrackAdvance();
-        seek_drag_progress_.reset();
-    }
+    if (playbackPlaylistId() == playlist_id)
+        stopPlayback();
 
     playlist_view_states_.erase(playlist_id);
     workspace_.closePlaylist(playlist_id);
@@ -3394,21 +3429,24 @@ void MainWindow::scheduleGaplessAdvanceTrack() {
     if (!advance.handled_current_track)
         return;
 
-    pending_end_of_track_advance_ = true;
-    pending_end_of_track_track_ = playbackTrackInstance(frame_now_playing_);
+    const auto audible_track = playbackTrackInstance(frame_now_playing_);
+    if (!audible_track)
+        return;
+
+    pending_end_of_track_track_ = audible_track;
     pending_end_of_track_target_item_id_ =
         playbackAdvanceItemId(playlist->playlist, audible_playlist_item_id, settings_.repeat_mode);
     if (!advance.next_index)
         return;
 
     const PlaylistItem& next = playlist->playlist.tracks()[*advance.next_index];
-    const bool can_gapless = frame_now_playing_ &&
-        frame_now_playing_->track_info &&
-        !frame_now_playing_->track_info->is_stream &&
-        Decoder::supportsGaplessForSource(frame_now_playing_->track_info->source) &&
-        Decoder::supportsGaplessForSource(next.source);
-    if (can_gapless)
-        app_.commandOpenFileGapless(next.source, playlist->id, next.id, playlist->revision);
+    if (canGaplessTransitionTo(next)) {
+        app_.commandOpenFileGapless(next.source,
+                                    playlist->id,
+                                    next.id,
+                                    playlist->revision,
+                                    *audible_track);
+    }
 }
 
 void MainWindow::openNextTrack() {

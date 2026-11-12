@@ -48,3 +48,34 @@ TEST_CASE("Playback track instance matching treats missing now playing as a dist
     CHECK(playbackTrackInstanceMatches(std::nullopt, nullptr));
     CHECK_FALSE(playbackTrackInstanceMatches(std::nullopt, now_playing));
 }
+
+TEST_CASE("Stopped at end of track means the decode thread has nothing queued") {
+    CHECK(shouldOpenEndOfTrackTargetDirectly(PlaybackStatus::Stopped, true));
+    CHECK(shouldOpenEndOfTrackTargetDirectly(PlaybackStatus::Stopped, false));
+}
+
+TEST_CASE("EndOfTrack defers to the queued gapless transition when one is possible") {
+    CHECK_FALSE(shouldOpenEndOfTrackTargetDirectly(PlaybackStatus::EndOfTrack, true));
+    CHECK(shouldOpenEndOfTrackTargetDirectly(PlaybackStatus::EndOfTrack, false));
+}
+
+TEST_CASE("Active playback never triggers a direct end-of-track open") {
+    for (const auto status : {PlaybackStatus::Playing,
+                              PlaybackStatus::Paused,
+                              PlaybackStatus::Buffering,
+                              PlaybackStatus::Seeking,
+                              PlaybackStatus::Error}) {
+        CHECK_FALSE(shouldOpenEndOfTrackTargetDirectly(status, true));
+        CHECK_FALSE(shouldOpenEndOfTrackTargetDirectly(status, false));
+    }
+}
+
+TEST_CASE("Idle playback statuses allow Play to start a track") {
+    CHECK(isIdlePlaybackStatus(PlaybackStatus::Stopped));
+    CHECK(isIdlePlaybackStatus(PlaybackStatus::EndOfTrack));
+    CHECK(isIdlePlaybackStatus(PlaybackStatus::Error));
+    CHECK_FALSE(isIdlePlaybackStatus(PlaybackStatus::Paused));
+    CHECK_FALSE(isIdlePlaybackStatus(PlaybackStatus::Playing));
+    CHECK_FALSE(isIdlePlaybackStatus(PlaybackStatus::Buffering));
+    CHECK_FALSE(isIdlePlaybackStatus(PlaybackStatus::Seeking));
+}
