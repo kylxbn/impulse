@@ -24,16 +24,16 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 FetchContent_Declare(imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        docking
-    GIT_SHALLOW    TRUE)
+    # v1.93.0-docking; keep in sync with the Flatpak manifest.
+    GIT_TAG        4e02e84cbb85d48881388e7090c2dfa1708c02a1)
 
 FetchContent_Declare(readerwriterqueue
     GIT_REPOSITORY https://github.com/cameron314/readerwriterqueue.git
-    GIT_TAG        master)
+    GIT_TAG        87b1df19256d68a9e093ca1540a5ef96b69145e8)
 
 FetchContent_Declare(libvgm
     GIT_REPOSITORY https://github.com/ValleyBell/libvgm.git
-    GIT_TAG        d1151884997ba4769b070b7c7aaedeffc60a25fb
+    GIT_TAG        c5c03a2c2514d38d2ab7b7e8dbd021af0b8292cb
     GIT_SHALLOW    FALSE)
 
 FetchContent_GetProperties(imgui)

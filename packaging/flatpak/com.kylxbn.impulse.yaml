@@ -1,7 +1,7 @@
 app-id: com.kylxbn.impulse
 branch: stable
 runtime: org.freedesktop.Platform
-runtime-version: "24.08"
+runtime-version: "26.08"
 sdk: org.freedesktop.Sdk
 command: impulse
 
@@ -35,7 +35,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/libsdl-org/SDL.git
-        commit: 683181b47cfabd293e3ea409f838915b8297a4fd
+        tag: release-3.4.20
+        commit: f00dc919ca35b9756316e86c4777392de442f9b2
 
   - name: libopenmpt
     buildsystem: simple
@@ -45,7 +46,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/OpenMPT/openmpt.git
-        commit: ba9632d86ed96289c69c94e2009c57291b58315a
+        tag: libopenmpt-0.8.10
+        commit: dc4ddcf682763d55c33dcf6c874a3153dea7b304
 
   - name: impulse
     buildsystem: cmake-ninja
@@ -61,13 +63,14 @@ modules:
         path: ../..
       - type: git
         url: https://github.com/ocornut/imgui.git
-        commit: 80f8298769fe7e6bedbfab3d015154681a0770e7
+        tag: v1.93.0-docking
+        commit: 4e02e84cbb85d48881388e7090c2dfa1708c02a1
         dest: vendor/imgui
       - type: git
         url: https://github.com/cameron314/readerwriterqueue.git
-        commit: 211616e0554f93152ab3108b8d93fbc23174a9d9
+        commit: 87b1df19256d68a9e093ca1540a5ef96b69145e8
         dest: vendor/readerwriterqueue
       - type: git
         url: https://github.com/ValleyBell/libvgm.git
-        commit: d1151884997ba4769b070b7c7aaedeffc60a25fb
+        commit: c5c03a2c2514d38d2ab7b7e8dbd021af0b8292cb
         dest: vendor/libvgm
